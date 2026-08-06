@@ -1,86 +1,89 @@
-# Konfigurace
+# Configuration
 
-## `.env` -- infrastrukturní nastavení
+## `.env` -- infrastructure settings
 
-| Proměnná | Výchozí | Co dělá |
+| Variable | Default | What it does |
 |---|---|---|
-| `COWRIE_SSH_PORT` | 2222 | Port na hostu pro Cowrie SSH |
-| `COWRIE_TELNET_PORT` | 2223 | Port na hostu pro Cowrie Telnet |
-| `GRAFANA_PORT` | 3000 | Port na hostu pro Grafana web UI |
-| `SESSION_VIEWER_PORT` | 8080 | Port na hostu pro přehled relací |
+| `COWRIE_SSH_PORT` | 2222 | Host port for Cowrie SSH |
+| `COWRIE_TELNET_PORT` | 2223 | Host port for Cowrie Telnet |
+| `GRAFANA_PORT` | 3000 | Host port for the Grafana web UI |
+| `SESSION_VIEWER_PORT` | 8080 | Host port for the session overview |
 | `GRAFANA_ADMIN_USER` | admin | Grafana admin login |
-| `GRAFANA_ADMIN_PASSWORD` | — | **Změň!** Grafana admin heslo |
-| `VIEWER_USER` | viewer | Basic-auth login pro session-viewer |
-| `VIEWER_PASSWORD` | — | **Změň!** Basic-auth heslo, generuje se do `config/nginx/htpasswd` skriptem `make setup` |
-| `WAN_IFACE` | eth0 | Síťové rozhraní hostu -- zjisti `ip route \| grep default` |
-| `ADMIN_CIDR` | — | Odkud smíš na SSH/Grafanu/viewer. Nikdy `0.0.0.0/0` |
-| `DNS_RESOLVERS` | 1.1.1.1,9.9.9.9 | Jediné DNS servery, na které Cowrie smí (pro resolvnutí URL při stahování vzorků) |
-| `COWRIE_EGRESS_SUBNET` | 172.30.0.0/24 | Interní Docker podsíť Cowrie -- měnit jen při konfliktu |
-| `COWRIE_IP` | 172.30.0.10 | Statická IP Cowrie na této podsíti (firewall na ni cílí přesně) |
-| `MGMT_PUBLISH_SUBNET` | 172.31.0.0/24 | Interní podsíť pro Grafana/viewer/generator |
-| `LOKI_RETENTION_HOURS` | 2160 (90 dní) | Jak dlouho Loki drží logy |
-| `SESSION_GENERATOR_INTERVAL` | 120 | Jak často (s) hledat nové zachycené relace |
+| `GRAFANA_ADMIN_PASSWORD` | — | **Change this!** Grafana admin password |
+| `VIEWER_USER` | viewer | Basic-auth login for the session viewer |
+| `VIEWER_PASSWORD` | — | **Change this!** Basic-auth password, generated into `config/nginx/htpasswd` by `make setup` |
+| `WAN_IFACE` | eth0 | The host's network interface -- find it with `ip route \| grep default` |
+| `ADMIN_CIDR` | — | Where you're allowed to reach SSH/Grafana/viewer from. Never `0.0.0.0/0` |
+| `DNS_RESOLVERS` | 1.1.1.1,9.9.9.9 | The only DNS servers Cowrie may reach (to resolve URLs during sample downloads) |
+| `COWRIE_EGRESS_SUBNET` | 172.30.0.0/24 | Cowrie's internal Docker subnet -- only change on conflict |
+| `COWRIE_IP` | 172.30.0.10 | Cowrie's static IP on that subnet (the firewall targets it precisely) |
+| `MGMT_PUBLISH_SUBNET` | 172.31.0.0/24 | Internal subnet for Grafana/viewer/generator |
+| `LOKI_RETENTION_HOURS` | 2160 (90 days) | How long Loki keeps logs |
+| `SESSION_GENERATOR_INTERVAL` | 120 | How often (s) to look for newly captured sessions |
 
-Po každé změně `.env`: `docker compose up -d` (znovu vytvoří jen
-kontejnery, které to potřebují) a pokud jsi měnil síťové/porty
-proměnné, znovu spusť `sudo make firewall`.
+After any `.env` change: `docker compose up -d` (recreates only the
+containers that need it), and if you changed network/port variables,
+run `sudo make firewall` again.
 
-## `config/cowrie/cowrie.cfg` -- chování honeypotu
+## `config/cowrie/cowrie.cfg` -- honeypot behavior
 
-Malý soubor, jen naše overrides nad Cowrie vestavěnými defaults (Cowrie
-si `cowrie.cfg.dist` načte sám interně z balíčku). Klíčové volby:
+A small file, just our overrides on top of Cowrie's built-in defaults
+(Cowrie loads its own `cowrie.cfg.dist` internally from the package).
+Key settings:
 
-- `hostname` -- jak se honeypot jmenuje (`uname -a`, prompt). Pokud
-  ho měníš, sjednoť i s `docker/fakefs-builder/Dockerfile` (tam je
-  hardcoded `webprod03` v `/etc/hostname`).
-- `backend = shell` -- **nikdy neměň** na `proxy`/`llm`. Emulace je
-  bezpečnostní hranice celého projektu.
-- `filesystem = etc/fs.pickle` -- viz `make fakefs` a
-  [ANTI-DETECTION.md](ANTI-DETECTION.md)
-- `download_limit_size` -- limit velikosti stahovaných vzorků malwaru
+- `hostname` -- what the honeypot calls itself (`uname -a`, the
+  prompt). If you change it, also update
+  `docker/fakefs-builder/Dockerfile` (it hardcodes `webprod03` in
+  `/etc/hostname`).
+- `backend = shell` -- **never change this** to `proxy`/`llm`. The
+  emulation is the security boundary of the whole project.
+- `filesystem = etc/fs.pickle` (under `[shell]`) -- see `make fakefs`
+  and [ANTI-DETECTION.md](ANTI-DETECTION.md)
+- `download_limit_size` -- size limit for downloaded malware samples
 
-**Soubor musí zůstat čistě ASCII** (i komentáře) -- Cowrie ho čte
-striktně jako ASCII, jinak spadne načítání a *všechna* přihlášení
-začnou selhávat.
+**The file must stay pure ASCII** (comments included) -- Cowrie reads
+it strictly as ASCII, otherwise loading breaks and *every* login
+starts failing.
 
-Po úpravě: `docker compose restart cowrie` (nebo `make reset-cowrie`).
+After editing: `docker compose restart cowrie` (or `make reset-cowrie`).
 
-## `config/cowrie/userdb.txt` -- kdo se může přihlásit
+## `config/cowrie/userdb.txt` -- who can log in
 
-Zpracovává se řádek po řádku, **první shoda vyhrává**:
-- `username:x:*` -- povolí libovolné heslo
-- `username:x:!heslo` -- zakáže konkrétní heslo
-- `username:x:!/regex/` -- zakáže cokoliv, co matchuje regex
-  (`!/.*/ ` = zakáže úplně vše pro toho uživatele)
+Processed line by line, **first match wins**:
+- `username:x:*` -- allow any password
+- `username:x:!password` -- deny that specific password
+- `username:x:!/regex/` -- deny anything matching the regex
+  (`!/.*/ ` = deny everything for that user)
 
-Výchozí soubor je třívrstvý (viz komentáře uvnitř):
-1. Systémové účty (`www-data`, `mysql`...) -- zamítnuty úplně
-2. Pár "je-tohle-honeypot" canary hesel pro root -- zamítnuta
-3. Všechno ostatní -- povoleno (hlavní zdroj dat)
+The default file has three layers (see the comments inside):
+1. System accounts (`www-data`, `mysql`...) -- denied outright
+2. A handful of "is this a honeypot?" canary passwords for root -- denied
+3. Everything else -- allowed (the main source of data)
 
-Chceš vidět víc "neúspěšných" přihlášení v Grafaně? Přidej víc
-explicitních `!heslo` řádků -- ale pozor, snižuješ tím objem
-zachycených dat od běžných botů. Viz diskuze v
+Want to see more "failed" logins in Grafana? Add more explicit
+`!password` lines -- but note you're trading away captured data
+volume from ordinary bots. See the discussion in
 [ANTI-DETECTION.md](ANTI-DETECTION.md).
 
-**I tenhle soubor musí být čistě ASCII.**
+**This file must be pure ASCII too.**
 
-## `config/promtail/promtail-config.yml` -- volitelný GeoIP
+## `config/promtail/promtail-config.yml` -- optional GeoIP
 
-Zdarma s registrací na [maxmind.com](https://www.maxmind.com/) stáhni
-`GeoLite2-City.mmdb`, ulož do `config/promtail/GeoLite2-City.mmdb`,
-odkomentuj `geoip` stage v souboru, `docker compose restart promtail`.
-Funguje čistě lokálně, žádné odchozí dotazy navíc.
+Download `GeoLite2-City.mmdb` for free (registration required) from
+[maxmind.com](https://www.maxmind.com/), save it to
+`config/promtail/GeoLite2-City.mmdb`, uncomment the `geoip` stage in
+the file, `docker compose restart promtail`. Works entirely locally,
+no extra outbound queries.
 
 ## `config/grafana/provisioning/dashboards/cowrie-overview.json`
 
-Dashboard se nahrává automaticky při startu Grafany (file-based
-provisioning). Uprav JSON přímo, nebo uprav v Grafana UI a exportuj
-zpět (Dashboard settings → JSON Model) -- jen pozor na
-`"datasource": {"uid": "loki"}` referenci, musí zůstat `loki` (matchuje
-`config/grafana/provisioning/datasources/loki.yaml`).
+The dashboard loads automatically when Grafana starts (file-based
+provisioning). Edit the JSON directly, or edit it in the Grafana UI
+and export it back (Dashboard settings → JSON Model) -- just watch
+the `"datasource": {"uid": "loki"}` reference, it must stay `loki`
+(matches `config/grafana/provisioning/datasources/loki.yaml`).
 
 ## `config/nginx/session-viewer.conf`
 
-Basic-auth + statické servírování `webui/`. Pro víc uživatelů přidej
-řádky do `config/nginx/htpasswd` (`htpasswd -B config/nginx/htpasswd novy_user`).
+Basic-auth + static serving of `webui/`. For more users, add lines to
+`config/nginx/htpasswd` (`htpasswd -B config/nginx/htpasswd new_user`).

@@ -1,89 +1,94 @@
-# Anti-detekce
+# Anti-detection
 
-Cowrie (jako většina SSH honeypotů) má několik rozpoznatelných
-"otisků prstů". Tenhle dokument shrnuje, co nás prozrazuje, co jsme
-udělali proti tomu, a proč tomu nevěnujeme neomezené úsilí.
+Cowrie (like most SSH honeypots) has a handful of recognizable
+fingerprints. This document summarizes what gives us away, what we've
+done about it, and why we don't chase this indefinitely.
 
-## Realita provozu
+## The reality of the traffic
 
-Naprostá většina provozu, co na veřejnou IP na portu 22/23 dopadne,
-jsou **automatizovaní boti a scannery** (Mirai varianty,
-credential-stuffing skripty). Ty honeypot detekci vůbec neřeší, jen
-mechanicky zkoušejí creds a spouští naučené příkazy -- to je přesně
-to, co chceš studovat, a na to Cowrie stačí beze změny. Cílená
-detekce honeypotu je relevantní hlavně pro sofistikovaného lidského
-útočníka nebo red-teamera.
+The vast majority of traffic that hits a public IP on port 22/23 is
+**automated bots and scanners** (Mirai variants, credential-stuffing
+scripts). They don't care about honeypot detection at all -- they
+just mechanically try creds and run canned commands. That's exactly
+what you want to study, and Cowrie handles it fine out of the box.
+Targeted honeypot detection mainly matters against a sophisticated
+human attacker or a red teamer.
 
-## Co nás prozrazuje
+## What gives us away
 
-1. **Permisivní `userdb.txt`** -- útočník zkusí nesmyslné heslo, na
-   reálném serveru to spadne. Hlavní tell, ale i hlavní zdroj dat.
-2. **Emulovaný shell má díry** -- Cowrie neemuluje coreutils dokonale
-   (např. `head -3`/`tail -3` s číselnou zkratkou selže). Nedá se to
-   snadno opravit bez patchování Cowrie samotného.
-3. **Generický fake filesystem** -- výchozí `fs.pickle` je stejný pro
-   každou Cowrie instalaci na světě.
-4. **SSH `kex`/`hassh` fingerprint** -- existují veřejné nástroje
-   (i Shodan Honeyscore), co ho aktivně testují.
-5. **Chování při zátěži** -- reálný server pod brute-force zpomalí,
-   Cowrie okamžitě a nekonečně přijímá spojení.
+1. **Permissive `userdb.txt`** -- an attacker tries a nonsense
+   password, a real server would reject it. The biggest tell, but
+   also the biggest source of data.
+2. **The emulated shell has gaps** -- Cowrie doesn't emulate coreutils
+   perfectly (e.g. `head -3`/`tail -3` with the numeric shorthand
+   fails). Not easily fixable without patching Cowrie itself.
+3. **Generic fake filesystem** -- the default `fs.pickle` is identical
+   across every Cowrie install on earth.
+4. **SSH `kex`/`hassh` fingerprint** -- public tools exist (including
+   Shodan Honeyscore) that actively test for it.
+5. **Behavior under load** -- a real server slows down under
+   brute-force, Cowrie accepts connections instantly and endlessly.
 
-## Co je naopak v pořádku
+## What's actually fine
 
-- TCP/IP stack je **skutečný** (běží na reálném Debian kernelu v
-  Docker kontejneru) -- nízkoúrovňové otisky (p0f) sedí
-- SSH banner odpovídá kernelu (`OpenSSH_9.2p1 Debian-12` + `uname`
-  hlásící Debian 12 kernel) -- interně konzistentní
+- The TCP/IP stack is **real** (runs on an actual Debian kernel inside
+  a Docker container) -- low-level fingerprints (p0f) check out
+- The SSH banner matches the kernel (`OpenSSH_9.2p1 Debian-12` +
+  `uname` reporting a Debian 12 kernel) -- internally consistent
 
-## Co tenhle projekt dělá proti tomu
+## What this project does about it
 
-### 1. Realistický fake filesystem (`make fakefs`)
+### 1. Realistic fake filesystem (`make fakefs`)
 
-`scripts/build-fakefs.sh` postaví jednorázový `debian:12-slim`
-kontejner s typickými balíčky (nginx, php, mariadb-client...) a
-trochou "nepořádku" (`/var/www/html`, `/opt/app/.env`), vyexportuje
-jeho filesystem a přes Cowrie vlastní nástroj `createfs` z něj udělá
+`scripts/build-fakefs.sh` builds a one-shot `debian:12-slim` container
+with typical packages installed (nginx, php, mariadb-client...) and a
+bit of realistic "clutter" (`/var/www/html`, `/opt/app/.env`), exports
+its filesystem, and uses Cowrie's own `createfs` tool to turn it into
 `config/cowrie/fs.pickle`.
 
-**Bezpečnostní poznámka:** `createfs` embeduje reálný OBSAH jen pro
-pár pevných cest (`/etc/passwd`, `/etc/shadow`, `/etc/hostname`,
-`/etc/os-release`, `/proc/cpuinfo`...). **Nikdy nespouštěj
-`build-fakefs.sh` proti produkčnímu/reálnému hostu** -- zdrojem musí
-být vždycky ten jednorázový, nesouvisející kontejner z
-`docker/fakefs-builder/`. Kdyby se pustil proti reálnému stroji,
-skutečný `/etc/shadow` s hashem tvého admin účtu by skončil čitelný
-útočníkům v honeypotu.
+**Security note:** `createfs` embeds real file CONTENT only for a
+handful of fixed paths (`/etc/passwd`, `/etc/shadow`, `/etc/hostname`,
+`/etc/os-release`, `/proc/cpuinfo`...). **Never run
+`build-fakefs.sh` against a production/real host** -- the source must
+always be that disposable, unrelated container from
+`docker/fakefs-builder/`. If it were run against a real machine, the
+actual `/etc/shadow` with your admin account's hash would end up
+readable by attackers inside the honeypot.
 
-Dva dílčí detaily, na které jsme narazili a `build-fakefs.sh` je řeší:
-- `docker export` nepřenese obsah `/etc/hostname` (Docker ho
-  spravuje mimo image vrstvu) -- skript ho dopisuje ručně po exportu.
-- `/etc/os-release` je na reálném Debianu symlink na
-  `/usr/lib/os-release`; `createfs` embeduje obsah jen u regulérních
-  souborů, ne symlinků -- skript ho před generováním dereferencuje.
+Two subtle issues we hit while generating this, both handled by
+`build-fakefs.sh`:
+- `docker export` doesn't carry over `/etc/hostname` content (Docker
+  manages it outside the image layer) -- the script writes it back
+  manually after export.
+- `/etc/os-release` is a symlink to `/usr/lib/os-release` on a real
+  Debian system; `createfs` only embeds content for regular files,
+  not symlinks -- the script dereferences it before generating.
 
-### 2. Vrstvený `userdb.txt`
+### 2. Layered `userdb.txt`
 
-Systémové účty (`www-data`, `mysql`, `nobody`...) mají explicitní
-zákaz -- reálný server jim nastavuje shell na `/usr/sbin/nologin`,
-takže by interaktivní login stejně neprošel. Root má navíc zamítnuté
-čtyři nejběžnější "je-tohle-honeypot" canary kombinace
-(`root/root`, `root/123456`, cokoliv obsahující "honeypot" nebo
-"cowrie"). Všechno ostatní zůstává permisivní -- to je záměr, hlavní
-zdroj dat.
+System/service accounts (`www-data`, `mysql`, `nobody`...) are denied
+outright -- a real server sets their shell to `/usr/sbin/nologin`, so
+an interactive login wouldn't succeed anyway. Root additionally has
+four common "is this a honeypot?" canary combos denied
+(`root/root`, `root/123456`, anything containing "honeypot" or
+"cowrie"). Everything else stays permissive -- that's intentional,
+it's the main source of data.
 
-**Past, na kterou jsme narazili:** Cowrie čte `userdb.txt` striktně
-jako ASCII. Neanglické komentáře (diakritika) v souboru způsobí
-`UnicodeDecodeError` při načítání, což shodí **úplně všechna**
-přihlášení (fail-closed), ne jen ta záměrně zamítnutá -- vypadá to
-jako "všechno je najednou rozbité", ne jako zjevná chyba konfigurace.
-Drž `userdb.txt` i `cowrie.cfg` čistě v ASCII.
+**A trap we hit:** Cowrie reads `userdb.txt` strictly as ASCII.
+Non-English comments (accented characters) in the file cause a
+`UnicodeDecodeError` on load, which breaks **every single** login
+(fail-closed), not just the intentionally denied ones -- it looks
+like "everything is suddenly broken" rather than an obvious config
+mistake. Keep `userdb.txt` and `cowrie.cfg` pure ASCII.
 
-## Co jsme (zatím) neřešili
+## What we haven't tackled (yet)
 
-- Timing/protokolové otisky na úrovni Twisted async stacku (výzkum
-  existuje, ale je to hlubší rabbit hole než má smysl pro domácí lab)
-- Přesná shoda balíčkové databáze (`dpkg -l` výstup) s reálným
-  systémem -- fake filesystem má strukturu, ne funkční `dpkg`
-- Sdílení threat-intel dat (SANS DShield) -- viz `cowrie.cfg`
-  komentovaná sekce `[output_dshield]`, vyžaduje vlastní firewall
-  výjimku navíc
+- Timing/protocol fingerprints at the Twisted async stack level
+  (research exists, but it's a deeper rabbit hole than makes sense
+  for a home lab)
+- Exact package database matching (`dpkg -l` output) against a real
+  system -- the fake filesystem has structure, not a functioning
+  `dpkg`
+- Threat-intel sharing (SANS DShield) -- see the commented-out
+  `[output_dshield]` section in `cowrie.cfg`, requires its own
+  additional firewall exception

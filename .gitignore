@@ -1,7 +1,7 @@
-# Obsahuje hesla, necommituje se
+# Contains passwords, not committed
 .env
 
-# Generovaná data -- vznikají za běhu, ne součást repa
+# Generated data -- created at runtime, not part of the repo
 webui/index.html
 webui/casts/
 webui/assets/asciinema-player.min.js
@@ -9,7 +9,7 @@ webui/assets/asciinema-player.css
 config/nginx/htpasswd
 config/cowrie/fs.pickle
 
-# Dočasné soubory build skriptů
+# Temporary files from build scripts
 .fakefs-tmp/
 
 # OS/editor

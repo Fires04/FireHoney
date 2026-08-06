@@ -1,9 +1,9 @@
 FROM python:3.13-slim
 
-# `cowrie` balíček nám dá nástroj pro konverzi ttylog -> asciinema
-# .cast formát (src/cowrie/scripts/asciinema.py), nic víc z něj
-# nepotřebujeme -- tenhle kontejner NENÍ honeypot, jen offline
-# zpracovává už zachycená data.
+# The `cowrie` package gives us the tool that converts a ttylog into
+# the asciinema .cast format (src/cowrie/scripts/asciinema.py), that's
+# all we need from it -- this container is NOT a honeypot, it just
+# processes already-captured data offline.
 RUN pip install --no-cache-dir cowrie
 
 COPY generate-sessions.py /app/generate-sessions.py

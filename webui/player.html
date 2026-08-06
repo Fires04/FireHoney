@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="cs">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Honeypot — přehrávač relace</title>
+<title>Honeypot -- session player</title>
 <link rel="stylesheet" type="text/css" href="assets/asciinema-player.css">
 <style>
   body { font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; margin: 2rem; }
@@ -11,7 +11,7 @@
 </style>
 </head>
 <body>
-<a class="back" href="index.html">&larr; zpět na seznam relací</a>
+<a class="back" href="index.html">&larr; back to session list</a>
 <div id="player"></div>
 <script src="assets/asciinema-player.min.js"></script>
 <script>
@@ -23,7 +23,7 @@
       terminalFontSize: "medium",
     });
   } else {
-    document.getElementById("player").textContent = "Chybí parametr ?cast=...";
+    document.getElementById("player").textContent = "Missing ?cast=... parameter";
   }
 </script>
 </body>

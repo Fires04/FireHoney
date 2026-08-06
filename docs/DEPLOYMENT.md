@@ -1,22 +1,22 @@
-# Nasazení -- krok za krokem
+# Deployment -- step by step
 
-## 0. Předpoklady
+## 0. Prerequisites
 
-- Čerstvá Linux VM (testováno na Debian 13), ideálně samostatná
-  (Proxmox nebo jiný hypervizor), na izolované síti/VLAN
-- Uživatel se sudo právy
+- A fresh Linux VM (tested on Debian 13), ideally dedicated (Proxmox
+  or any other hypervisor), on an isolated network/VLAN
+- A user with sudo rights
 - ~2 GB RAM, 20 GB disk
 
-Doporučená síťová izolace (Proxmox + Ubiquiti jako příklad, princip
-platí obecně): honeypot VM na vlastní VLAN, pravidla:
+Recommended network isolation (Proxmox + Ubiquiti as an example, the
+principle applies generally): honeypot VM on its own VLAN, rules:
 
-| Zdroj | Cíl | Akce |
+| Source | Destination | Action |
 |---|---|---|
-| Honeypot VLAN | zbytek LAN | **Block** |
-| Honeypot VLAN | management rozhraní routeru/switche | **Block** |
-| Tvoje admin IP | Honeypot VLAN, porty 22/3000/8080 | **Allow** |
-| Internet (WAN) | Honeypot VLAN, porty 2222/2223 | **Allow** (port forward) |
-| Internet (WAN) | cokoliv jiného | **Block** (default) |
+| Honeypot VLAN | rest of LAN | **Block** |
+| Honeypot VLAN | router/switch management interface | **Block** |
+| Your admin IP | Honeypot VLAN, ports 22/3000/8080 | **Allow** |
+| Internet (WAN) | Honeypot VLAN, ports 2222/2223 | **Allow** (port forward) |
+| Internet (WAN) | anything else | **Block** (default) |
 
 ## 1. Docker
 
@@ -30,90 +30,90 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.
   sudo tee /etc/apt/sources.list.d/docker.list
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo usermod -aG docker "$USER"   # odhlas se a znovu prihlas
+sudo usermod -aG docker "$USER"   # log out and back in
 ```
 
-## 2. Stažení a konfigurace projektu
+## 2. Download and configure the project
 
 ```bash
-git clone <tento-repo> cowrie-honeypot-stack
+git clone https://github.com/Fires04/FireHoney.git cowrie-honeypot-stack
 cd cowrie-honeypot-stack
 cp .env.example .env
 $EDITOR .env
 ```
 
-V `.env` uprav minimálně:
-- `GRAFANA_ADMIN_PASSWORD`, `VIEWER_PASSWORD` -- vlastní hesla
-- `WAN_IFACE` -- zjisti přes `ip route | grep default`
-- `ADMIN_CIDR` -- IP/rozsah, odkud smíš na správu (SSH, Grafana, viewer)
+At minimum, set in `.env`:
+- `GRAFANA_ADMIN_PASSWORD`, `VIEWER_PASSWORD` -- your own passwords
+- `WAN_IFACE` -- find it with `ip route | grep default`
+- `ADMIN_CIDR` -- the IP/range you're allowed to administer from (SSH, Grafana, viewer)
 
-Podrobný popis všech proměnných: [CONFIGURATION.md](CONFIGURATION.md)
+Full description of every variable: [CONFIGURATION.md](CONFIGURATION.md)
 
-## 3. Setup a spuštění
+## 3. Setup and startup
 
 ```bash
 make setup       # htpasswd, asciinema-player, docker pull
-make fakefs       # (doporučeno) realistický fake filesystem -- viz ANTI-DETECTION.md
-make up           # rozjede cely stack
+make fakefs        # (recommended) realistic fake filesystem -- see ANTI-DETECTION.md
+make up             # bring up the whole stack
 sudo make firewall
 ```
 
-Ověř, že vše běží:
+Verify everything is running:
 ```bash
-docker compose ps    # 6 kontejnerů: cowrie, promtail, loki, grafana,
-                      # session-viewer, session-generator -- vsechny "Up"
+docker compose ps    # 6 containers: cowrie, promtail, loki, grafana,
+                      # session-viewer, session-generator -- all "Up"
 ```
 
-## 4. Ověření
+## 4. Verification
 
 ```bash
-# reálný test login (potřebuješ sshpass: sudo apt install sshpass)
+# a real test login (needs sshpass: sudo apt install sshpass)
 sshpass -p test123 ssh -o StrictHostKeyChecking=no attacker@localhost -p "${COWRIE_SSH_PORT:-2222}" "whoami; uname -a; exit"
 ```
 
-- Grafana: `http://SERVER_IP:3000` (login z `.env`) -- rovnou uvidíš
-  hotový dashboard
-- Session viewer: `http://SERVER_IP:8080` (basic-auth z `.env`) --
-  po chvíli (`SESSION_GENERATOR_INTERVAL`) se objeví tvůj test login,
-  nebo hned: `make sessions` (spustí generátor na počkání, bez čekání
-  na další tik smyčky)
+- Grafana: `http://SERVER_IP:3000` (login from `.env`) -- you'll land
+  straight on the ready-made dashboard
+- Session viewer: `http://SERVER_IP:8080` (basic-auth from `.env`) --
+  your test login shows up after a bit (`SESSION_GENERATOR_INTERVAL`),
+  or right away: `make sessions` (runs the generator on demand,
+  without waiting for the next loop tick)
 
-## 5. Firewall ověření
+## 5. Firewall verification
 
 ```bash
 docker exec cowrie /cowrie/cowrie-env/bin/python3 -c \
   "import socket; socket.create_connection(('1.1.1.1',443),timeout=5); print('OK 443')"
-# mělo by projít -- to je jediná povolená výjimka
+# should succeed -- that's the one allowed exception
 
 docker exec session-viewer wget -T3 -O- http://1.1.1.1
-# mělo by SPADNOUT na timeout
+# should time out
 ```
 
-## 6. Port forward na routeru
+## 6. Port forwarding on your router
 
-Až budeš připraven vystavit do internetu:
-- `WAN:22 → SERVER_IP:${COWRIE_SSH_PORT}` (vypadá jako běžný SSH port zvenku)
+Once you're ready to expose this to the internet:
+- `WAN:22 → SERVER_IP:${COWRIE_SSH_PORT}` (looks like a regular SSH port from outside)
 - `WAN:23 → SERVER_IP:${COWRIE_TELNET_PORT}`
-- **Neforwarduj** porty 3000/8080/skutečný SSH admin port -- ty musí
-  zůstat dostupné jen z `ADMIN_CIDR`.
+- **Do not forward** ports 3000/8080/the real SSH admin port -- those
+  must stay reachable only from `ADMIN_CIDR`.
 
 ## 7. Snapshot / golden state
 
-Než na to pustíš skutečné útočníky, udělej snapshot VM (Proxmox/hypervizor)
-v tomhle čistém stavu -- viz [SECURITY.md](SECURITY.md) pro doporučenou
-periodickou obnovu.
+Before you let real attackers at it, take a VM snapshot
+(Proxmox/hypervisor) in this clean state -- see
+[SECURITY.md](SECURITY.md) for the recommended periodic reset.
 
-## Aktualizace
+## Updating
 
 ```bash
 git pull
 make update        # docker compose pull + up -d
-sudo make firewall  # znovu, aby pravidla sedela na aktualní síť
+sudo make firewall  # again, so the rules match the current network
 ```
 
-## Odinstalace
+## Uninstalling
 
 ```bash
-docker compose down -v   # -v smaže i data (logy, session, Grafana state)
+docker compose down -v   # -v also deletes data (logs, sessions, Grafana state)
 sudo iptables -F DOCKER-USER
 ```

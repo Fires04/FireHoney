@@ -1,14 +1,14 @@
 name: cowrie-honeypot
 
-# Architektura a bezpečnostní model jsou popsané v docs/ARCHITECTURE.md
-# a docs/SECURITY.md. Ve zkratce:
-#   - cowrie je na síti "honeypot-egress" (jediná se skutečnou cestou
-#     ven, filtrovanou přes scripts/firewall.sh) a "internal" (pro
-#     odesílání logů do Loki, bez cesty ven).
-#   - grafana/session-viewer/session-generator jsou na "internal" +
-#     "mgmt-publish" (druhá existuje jen kvůli Docker port-publish
-#     mechanismu, viz docs/SECURITY.md -- žádnou výjimku ve firewallu
-#     nemá).
+# Architecture and security model are described in docs/ARCHITECTURE.md
+# and docs/SECURITY.md. In short:
+#   - cowrie sits on the "honeypot-egress" network (the only one with
+#     a real route out, filtered via scripts/firewall.sh) and
+#     "internal" (for shipping logs to Loki, no route out).
+#   - grafana/session-viewer/session-generator sit on "internal" +
+#     "mgmt-publish" (the latter exists only because of the Docker
+#     port-publish mechanism, see docs/SECURITY.md -- it gets no
+#     firewall exception).
 
 networks:
   honeypot-egress:
@@ -60,8 +60,9 @@ services:
       - internal
     volumes:
       - cowrie-var-log:/cowrie-logs:ro
-      # celá složka (ne jen soubor), aby šel drop-in i volitelný
-      # GeoLite2-City.mmdb -- viz config/promtail/promtail-config.yml
+      # the whole directory (not just the file), so an optional
+      # GeoLite2-City.mmdb can be dropped in -- see
+      # config/promtail/promtail-config.yml
       - ./config/promtail:/etc/promtail:ro
     command: -config.file=/etc/promtail/promtail-config.yml
     deploy:
@@ -101,7 +102,7 @@ services:
       - "${GRAFANA_PORT:-3000}:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?nastav GRAFANA_ADMIN_PASSWORD v .env}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/cowrie-overview.json
     volumes:

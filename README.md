@@ -1,98 +1,101 @@
 # Cowrie Honeypot Stack
 
-Kompletní, znovupoužitelný Docker Compose balíček pro nasazení SSH/Telnet
-honeypotu ([Cowrie](https://github.com/cowrie/cowrie)) s živým monitoringem
-a webovým přehráváním zachycených relací -- postavené jako moderní
-náhrada za nevyvíjený [HoneyDrive](https://sourceforge.net/projects/honeydrive/).
+A complete, reusable Docker Compose package for deploying an SSH/Telnet
+honeypot ([Cowrie](https://github.com/cowrie/cowrie)) with live monitoring
+and web-based session playback -- built as a modern replacement for the
+now-unmaintained [HoneyDrive](https://sourceforge.net/projects/honeydrive/).
 
 ![status](https://img.shields.io/badge/status-home--lab-orange)
 
-## Co dostaneš
+## What you get
 
-- **Cowrie** -- emulovaný SSH/Telnet honeypot (útočník nikdy nedostane
-  skutečný shell, jen věrohodnou napodobeninu)
-- **Grafana dashboard** -- hotový při prvním startu (auto-provisioning),
-  živé grafy přihlašovacích pokusů, top hesel, streamu příkazů
-- **Webové přehrávání relací** -- self-hosted (asciinema-player), žádné
-  CDN, žádný SSH ani terminál potřeba
-- **Realistický fake filesystem** -- generovaný z opravdového Debian
-  serveru s balíčky (ne generický default, co má každá Cowrie instalace
-  na světě stejný)
-- **Přísný egress firewall** -- kontejner honeypotu nesmí ven nikam
-  kromě přesně definované výjimky (stahování malware vzorků)
-- Vše ovladatelné jedním `.env` souborem
+- **Cowrie** -- an emulated SSH/Telnet honeypot (the attacker never gets
+  a real shell, just a convincing imitation of one)
+- **Grafana dashboard** -- ready on first boot (auto-provisioning), live
+  graphs of login attempts, top passwords, command stream
+- **Web-based session playback** -- self-hosted (asciinema-player), no
+  CDN, no SSH or terminal needed
+- **Realistic fake filesystem** -- generated from an actual Debian
+  server with packages installed (not the generic default every Cowrie
+  install on earth shares)
+- **Strict egress firewall** -- the honeypot container can't reach
+  anywhere outbound except one precisely defined exception (malware
+  sample downloads)
+- Everything configurable from a single `.env` file
 
-## Rychlý start
+## Quick start
 
 ```bash
-git clone <tento-repo> cowrie-honeypot-stack
+git clone https://github.com/Fires04/FireHoney.git cowrie-honeypot-stack
 cd cowrie-honeypot-stack
 cp .env.example .env
-$EDITOR .env              # nastav hesla, WAN_IFACE, ADMIN_CIDR
+$EDITOR .env              # set passwords, WAN_IFACE, ADMIN_CIDR
 
 make setup                # htpasswd, asciinema-player, docker pull
-make fakefs                # (doporučeno) realistický fake filesystem
-make up                    # rozjede celý stack
+make fakefs                # (recommended) realistic fake filesystem
+make up                    # bring up the whole stack
 sudo make firewall         # egress lockdown
 
 # Grafana:         http://SERVER_IP:3000
 # Session viewer:  http://SERVER_IP:8080
 ```
 
-**Než to vystavíš do internetu**, projdi si [docs/SECURITY.md](docs/SECURITY.md)
-checklist -- síťová izolace (VLAN), port forwarding, a co dělat, než na
-to pustíš reálné útočníky.
+**Before exposing this to the internet**, go through the
+[docs/SECURITY.md](docs/SECURITY.md) checklist -- network isolation
+(VLAN), port forwarding, and what to do before you let real attackers
+at it.
 
-## Dokumentace
+## Documentation
 
-| Dokument | O čem je |
+| Document | What it covers |
 |---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Jak to je poskládané, síťový diagram, proč jedna VM |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Krok za krokem od čerstvé VM po běžící honeypot |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Co dělá každá `.env` proměnná, jak upravit `cowrie.cfg`/`userdb.txt` |
-| [docs/SECURITY.md](docs/SECURITY.md) | Firewall model, checklist před vystavením do světa, GDPR |
-| [docs/ANTI-DETECTION.md](docs/ANTI-DETECTION.md) | Proč a jak honeypot vypadá méně nápadně |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it's put together, network diagram, why one VM |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Step by step from a fresh VM to a running honeypot |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | What every `.env` variable does, how to tweak `cowrie.cfg`/`userdb.txt` |
+| [docs/SECURITY.md](docs/SECURITY.md) | Firewall model, pre-launch checklist, GDPR |
+| [docs/ANTI-DETECTION.md](docs/ANTI-DETECTION.md) | Why and how the honeypot looks less obvious |
 
-## Požadavky
+## Requirements
 
-- Linux server (testováno na Debian 13), Docker Engine + Compose plugin
-- Doporučeno: samostatná VM (Proxmox nebo jiný hypervizor), izolovaná
-  síť/VLAN -- viz [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Linux server (tested on Debian 13), Docker Engine + Compose plugin
+- Recommended: a dedicated VM (Proxmox or any other hypervisor) on an
+  isolated network/VLAN -- see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - ~2 GB RAM, 20 GB disk
 
-## Struktura projektu
+## Project structure
 
 ```
 .
-├── docker-compose.yml       # orchestrace, čte .env
-├── .env.example              # zkopíruj na .env a uprav
+├── docker-compose.yml       # orchestration, reads .env
+├── .env.example              # copy to .env and edit
 ├── Makefile                  # make setup/up/down/firewall/fakefs/...
 ├── config/
-│   ├── cowrie/                cowrie.cfg, userdb.txt, fs.pickle (generovaný)
-│   ├── promtail/               promtail-config.yml
-│   ├── loki/                   loki-config.yml
-│   ├── nginx/                  session-viewer.conf, htpasswd (generovaný)
-│   └── grafana/provisioning/   datasource + dashboard, nahraje se sám
+│   ├── cowrie/                 cowrie.cfg, userdb.txt, fs.pickle (generated)
+│   ├── promtail/                promtail-config.yml
+│   ├── loki/                    loki-config.yml
+│   ├── nginx/                   session-viewer.conf, htpasswd (generated)
+│   └── grafana/provisioning/    datasource + dashboard, loads itself
 ├── docker/
-│   ├── session-generator/     vlastní image: převádí relace na .cast + index.html
-│   └── fakefs-builder/         vlastní image: zdroj pro realistický filesystem
+│   ├── session-generator/      custom image: turns sessions into .cast + index.html
+│   └── fakefs-builder/          custom image: source for the realistic filesystem
 ├── scripts/
-│   ├── setup.sh                jednorázová příprava
-│   ├── build-fakefs.sh          generuje fs.pickle
-│   └── firewall.sh              egress lockdown
-├── webui/                     player.html + generovaný obsah
-└── docs/                       viz tabulka výše
+│   ├── setup.sh                 one-time setup
+│   ├── build-fakefs.sh           generates fs.pickle
+│   └── firewall.sh               egress lockdown
+├── webui/                     player.html + generated content
+└── docs/                       see table above
 ```
 
-## Proč tahle architektura
+## Why this architecture
 
-Cowrie je emulace (útočník nikdy nedostane reálný shell), takže je to
-podstatně bezpečnější než honeypot s reálným OS. I tak je nasazení
-navržené s vrstvenou obranou: izolovaná síť (doporučeno), striktní
-odchozí firewall na úrovni Dockeru, žádná admin rozhraní vystavená do
-internetu. Detaily v [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) a
+Cowrie is an emulation (the attacker never gets a real shell), which
+makes it substantially safer than a honeypot running a real OS. Even
+so, the deployment is designed with defense in depth: an isolated
+network (recommended), a strict egress firewall at the Docker level,
+no admin interfaces exposed to the internet. Details in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [docs/SECURITY.md](docs/SECURITY.md).
 
-## Licence
+## License
 
-MIT (viz LICENSE). Cowrie samo má vlastní licenci (BSD-3-Clause).
+MIT (see LICENSE). Cowrie itself has its own license (BSD-3-Clause).

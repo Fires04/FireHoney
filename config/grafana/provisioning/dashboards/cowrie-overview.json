@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "cowrie-overview",
-  "title": "Cowrie Honeypot — přehled",
+  "title": "Cowrie Honeypot — Overview",
   "tags": [
     "cowrie",
     "honeypot"
@@ -15,7 +15,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Celkem session (za vybrané období)",
+      "title": "Total sessions (selected period)",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -36,7 +36,7 @@
     },
     {
       "id": 2,
-      "title": "Úspěšná přihlášení (za vybrané období)",
+      "title": "Successful logins (selected period)",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -76,7 +76,7 @@
     },
     {
       "id": 3,
-      "title": "Neúspěšná přihlášení (za vybrané období)",
+      "title": "Failed logins (selected period)",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -97,7 +97,7 @@
     },
     {
       "id": 4,
-      "title": "Stažené vzorky malwaru",
+      "title": "Downloaded malware samples",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -118,7 +118,7 @@
     },
     {
       "id": 5,
-      "title": "Přihlašovací pokusy v čase (úspěch vs. neúspěch)",
+      "title": "Login attempts over time (success vs. failure)",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -139,7 +139,7 @@
     },
     {
       "id": 6,
-      "title": "Živý stream — příkazy spuštěné útočníky",
+      "title": "Live stream — commands run by attackers",
       "type": "logs",
       "gridPos": {
         "h": 8,
@@ -165,7 +165,7 @@
     },
     {
       "id": 7,
-      "title": "Živý stream — všechny události",
+      "title": "Live stream — all events",
       "type": "logs",
       "gridPos": {
         "h": 8,
@@ -191,7 +191,7 @@
     },
     {
       "id": 8,
-      "title": "Nejčastěji zkoušené uživatel/heslo (za vybrané období)",
+      "title": "Most common username/password combos (selected period)",
       "type": "table",
       "gridPos": {
         "h": 10,
@@ -218,7 +218,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Počet pokusů"
+                "value": "Attempt count"
               },
               {
                 "id": "custom.align",
@@ -234,7 +234,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Výsledek"
+                "value": "Result"
               }
             ]
           }

@@ -26,12 +26,13 @@ scrape_configs:
             input: input
             timestamp: timestamp
 
-      # Volitelné GeoIP obohacení, lokálně z MaxMind DB (žádné odchozí
-      # dotazy). Vyžaduje stažení GeoLite2-City.mmdb (zdarma s
-      # registrací na maxmind.com) do config/promtail/GeoLite2-City.mmdb.
-      # Odkomentuj až tam ten soubor bude:
+      # Optional GeoIP enrichment, purely local from a MaxMind DB (no
+      # outbound queries). Requires downloading GeoLite2-City.mmdb
+      # (free with registration at maxmind.com) into
+      # config/promtail/GeoLite2-City.mmdb. Uncomment once the file
+      # is there:
       # - geoip:
-      #     db: /etc/promtail/GeoLite2-City.mmdb   # <- polož soubor sem
+      #     db: /etc/promtail/GeoLite2-City.mmdb   # <- put the file here
       #     source: src_ip
       #     db_type: city
 

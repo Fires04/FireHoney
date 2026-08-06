@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Bezi jako samostatny kontejner "session-generator" (viz docker-compose.yml).
+Runs as its own container "session-generator" (see docker-compose.yml).
 
-Prochazi cowrie.json (read-only pripojeny svazek cowrie-var-log), najde
-uzavrene session (cowrie.log.closed = ma ttylog), dohleda metadata
-(src_ip, cas, spustene prikazy), zkonvertuje ttylog do asciinema .cast
-(pokud jeste neni) a vygeneruje webui/index.html se seznamem.
+Scans cowrie.json (read-only mounted cowrie-var-log volume), finds
+closed sessions (cowrie.log.closed = has a ttylog), looks up metadata
+(src_ip, timestamp, commands run), converts the ttylog to an asciinema
+.cast (if not already done), and regenerates webui/index.html with the
+list.
 
-Smycka bezi porad dokola, interval nastavis pres env GENERATE_INTERVAL
-(vteriny, default 120) v .env souboru projektu.
+Runs in a loop forever; set the interval via the GENERATE_INTERVAL env
+var (seconds, default 120) in the project's .env file. Pass --once to
+run a single pass and exit (used by `make sessions`).
 """
 import html
 import json
@@ -30,9 +32,9 @@ INTERVAL = int(os.environ.get("GENERATE_INTERVAL", "120"))
 
 
 def ttylog_to_container_path(ttylog_field: str) -> Path:
-    # cowrie.json obsahuje cesty relativni k cowrie cwd, napr.
-    # "var/lib/cowrie/tty/<hash>". Nas mount odpovida jen "var/lib/",
-    # zbytek za tim je stejny.
+    # cowrie.json stores paths relative to cowrie's cwd, e.g.
+    # "var/lib/cowrie/tty/<hash>". Our mount corresponds to just
+    # "var/lib/", the rest of the path stays the same.
     rel = ttylog_field.split("var/lib/", 1)[-1]
     return VAR_LIB_DIR / rel
 
@@ -87,13 +89,13 @@ def run_once() -> int:
                     check=True, capture_output=True, timeout=30,
                 )
             except Exception as e:
-                print(f"WARN: konverze selhala pro {tty_path}: {e}", flush=True)
+                print(f"WARN: conversion failed for {tty_path}: {e}", flush=True)
                 continue
 
         if not cast_path.exists():
             continue
 
-        cmds_preview = html.escape(" | ".join(s["commands"][:5])) or "(bez prikazu)"
+        cmds_preview = html.escape(" | ".join(s["commands"][:5])) or "(no commands)"
         login = html.escape(s["login"] or "?")
         src_ip = html.escape(s["src_ip"] or "?")
         start = html.escape(s["start"] or "?")
@@ -105,16 +107,16 @@ def run_once() -> int:
       <td>{s["protocol"]}</td>
       <td>{login}</td>
       <td class="cmds">{cmds_preview}</td>
-      <td><a href="player.html?cast=casts/{cast_name}" class="play">&#9654; prehrat</a></td>
+      <td><a href="player.html?cast=casts/{cast_name}" class="play">&#9654; play</a></td>
     </tr>""")
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     html_out = f"""<!doctype html>
-<html lang="cs">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Honeypot -- zaznamenane relace</title>
+<title>Honeypot -- captured sessions</title>
 <style>
   body {{ font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; margin: 2rem; }}
   h1 {{ color: #58a6ff; }}
@@ -129,11 +131,11 @@ def run_once() -> int:
 </style>
 </head>
 <body>
-<h1>Honeypot -- zaznamenane relace</h1>
-<div class="meta">Vygenerovano: {generated_at} - Celkem relaci: {len(rows)}</div>
+<h1>Honeypot -- captured sessions</h1>
+<div class="meta">Generated: {generated_at} - Total sessions: {len(rows)}</div>
 <table>
-<tr><th>Cas</th><th>Zdrojova IP</th><th>Protokol</th><th>Login</th><th>Prikazy (nahled)</th><th></th></tr>
-{"".join(rows) if rows else '<tr><td colspan="6">Zatim zadne zaznamenane relace.</td></tr>'}
+<tr><th>Time</th><th>Source IP</th><th>Protocol</th><th>Login</th><th>Commands (preview)</th><th></th></tr>
+{"".join(rows) if rows else '<tr><td colspan="6">No captured sessions yet.</td></tr>'}
 </table>
 </body>
 </html>
@@ -143,20 +145,21 @@ def run_once() -> int:
 
 
 if __name__ == "__main__":
-    # `--once` -- spusti jeden pruchod a skonci (napr. pro rucni
+    # `--once` -- run a single pass and exit (e.g. for a manual
     # `docker exec session-generator python3 generate-sessions.py --once`
-    # bez cekani na dalsi tik smycky). Bez prepinace bezi porad dokola,
-    # to je normalni chovani kontejneru z docker-compose.yml.
+    # without waiting for the next loop tick). Without the flag it
+    # loops forever, which is the normal behavior for the container
+    # started from docker-compose.yml.
     if "--once" in sys.argv:
         n = run_once()
-        print(f"OK: {n} relaci, index.html vygenerovan", flush=True)
+        print(f"OK: {n} session(s), index.html generated", flush=True)
         sys.exit(0)
 
     print(f"session-generator: interval={INTERVAL}s", flush=True)
     while True:
         try:
             n = run_once()
-            print(f"OK: {n} relaci, index.html vygenerovan", flush=True)
+            print(f"OK: {n} session(s), index.html generated", flush=True)
         except Exception as e:
-            print(f"CHYBA v behu generatoru: {e}", flush=True)
+            print(f"ERROR in generator run: {e}", flush=True)
         time.sleep(INTERVAL)

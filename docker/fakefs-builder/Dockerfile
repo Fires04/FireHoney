@@ -1,9 +1,9 @@
-# Jednorazovy, nikdy nespoustemy image -- jen zdroj pro
-# scripts/build-fakefs.sh, ktery z neho vyexportuje filesystem a
-# vyrobi z nej config/cowrie/fs.pickle (viz docs/ANTI-DETECTION.md).
+# A one-shot image, never run as a service -- just the source for
+# scripts/build-fakefs.sh, which exports its filesystem and turns it
+# into config/cowrie/fs.pickle (see docs/ANTI-DETECTION.md).
 #
-# DULEZITE: tenhle obraz NENI honeypot a nikdy nebezi jako sluzba --
-# je to jen zdroj "vzorku" realistickeho Debian systemu k proskenovani.
+# IMPORTANT: this image is NOT a honeypot and never runs as a service
+# -- it's just a "sample" source of a realistic Debian system to scan.
 FROM debian:12-slim
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \

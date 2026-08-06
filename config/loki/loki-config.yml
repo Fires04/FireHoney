@@ -26,8 +26,8 @@ schema_config:
         period: 24h
 
 limits_config:
-  # Hodnota se bere z LOKI_RETENTION_HOURS v .env (expandováno přes
-  # -config.expand-env=true, viz docker-compose.yml)
+  # Value comes from LOKI_RETENTION_HOURS in .env (expanded via
+  # -config.expand-env=true, see docker-compose.yml)
   retention_period: ${LOKI_RETENTION_HOURS}h
   ingestion_rate_mb: 8
   ingestion_burst_size_mb: 16
