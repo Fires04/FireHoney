@@ -1,0 +1,56 @@
+# userdb.txt -- layered model (rationale in README.md)
+#
+# Processed line by line, FIRST match wins, processing stops.
+# '*' = wildcard, '!' = deny that combo, '/regex/' = regex.
+#
+# IMPORTANT: Cowrie loads this file as strict ASCII. No accented
+# characters in this file at all, not even in comments, or the
+# userdb loader throws UnicodeDecodeError and EVERY login fails
+# (fail-closed, including ones that should have been allowed).
+
+# --- 1) Service/system accounts: a real Debian server sets their
+#        shell to /usr/sbin/nologin, interactive SSH login just
+#        does not work. Better to deny outright than let them log
+#        in with any password (which would be a giveaway). ---
+www-data:x:!/.*/
+nobody:x:!/.*/
+daemon:x:!/.*/
+bin:x:!/.*/
+sys:x:!/.*/
+sync:x:!/.*/
+games:x:!/.*/
+man:x:!/.*/
+lp:x:!/.*/
+mail:x:!/.*/
+news:x:!/.*/
+uucp:x:!/.*/
+proxy:x:!/.*/
+backup:x:!/.*/
+list:x:!/.*/
+irc:x:!/.*/
+gnats:x:!/.*/
+systemd-network:x:!/.*/
+systemd-resolve:x:!/.*/
+messagebus:x:!/.*/
+_apt:x:!/.*/
+mysql:x:!/.*/
+postgres:x:!/.*/
+redis:x:!/.*/
+sshd:x:!/.*/
+
+# --- 2) Known "is this a honeypot?" canary combos for root, used
+#        by scanners/researchers specifically to test for honeypots. ---
+root:x:!root
+root:x:!123456
+root:x:!/honeypot/i
+root:x:!/cowrie/i
+
+# --- 3) Everything else is allowed. Intentionally permissive --
+#        this is the main data source (password-spray patterns,
+#        credential-stuffing lists attackers use). ---
+root:x:*
+tomcat:x:*
+oracle:x:*
+appuser:x:*
+*:x:somepassword
+*:x:*

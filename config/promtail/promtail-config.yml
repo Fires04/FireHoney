@@ -1,0 +1,43 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: cowrie
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: cowrie
+          __path__: /cowrie-logs/cowrie/cowrie.json
+
+    pipeline_stages:
+      - json:
+          expressions:
+            eventid: eventid
+            src_ip: src_ip
+            username: username
+            password: password
+            input: input
+            timestamp: timestamp
+
+      # Volitelné GeoIP obohacení, lokálně z MaxMind DB (žádné odchozí
+      # dotazy). Vyžaduje stažení GeoLite2-City.mmdb (zdarma s
+      # registrací na maxmind.com) do config/promtail/GeoLite2-City.mmdb.
+      # Odkomentuj až tam ten soubor bude:
+      # - geoip:
+      #     db: /etc/promtail/GeoLite2-City.mmdb   # <- polož soubor sem
+      #     source: src_ip
+      #     db_type: city
+
+      - labels:
+          eventid:
+
+      - timestamp:
+          source: timestamp
+          format: RFC3339

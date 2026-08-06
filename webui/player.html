@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Honeypot — přehrávač relace</title>
+<link rel="stylesheet" type="text/css" href="assets/asciinema-player.css">
+<style>
+  body { font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; margin: 2rem; }
+  a.back { color: #58a6ff; text-decoration: none; }
+  #player { max-width: 900px; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<a class="back" href="index.html">&larr; zpět na seznam relací</a>
+<div id="player"></div>
+<script src="assets/asciinema-player.min.js"></script>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const cast = params.get("cast");
+  if (cast) {
+    AsciinemaPlayer.create(cast, document.getElementById("player"), {
+      autoPlay: false,
+      terminalFontSize: "medium",
+    });
+  } else {
+    document.getElementById("player").textContent = "Chybí parametr ?cast=...";
+  }
+</script>
+</body>
+</html>

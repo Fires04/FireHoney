@@ -1,0 +1,17 @@
+# Obsahuje hesla, necommituje se
+.env
+
+# Generovaná data -- vznikají za běhu, ne součást repa
+webui/index.html
+webui/casts/
+webui/assets/asciinema-player.min.js
+webui/assets/asciinema-player.css
+config/nginx/htpasswd
+config/cowrie/fs.pickle
+
+# Dočasné soubory build skriptů
+.fakefs-tmp/
+
+# OS/editor
+.DS_Store
+*.swp
