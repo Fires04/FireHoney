@@ -31,7 +31,7 @@ set +a
 : "${COWRIE_IP:?set COWRIE_IP in .env}"
 : "${COWRIE_EGRESS_SUBNET:?set COWRIE_EGRESS_SUBNET in .env}"
 : "${MGMT_PUBLISH_SUBNET:?set MGMT_PUBLISH_SUBNET in .env}"
-: "${ADMIN_CIDR:?set ADMIN_CIDR in .env -- where you're allowed to reach SSH/Grafana from}"
+: "${ADMIN_CIDR:?set ADMIN_CIDR in .env -- where you are allowed to reach SSH/Grafana from}"
 
 IFS=',' read -ra RESOLVERS <<< "${DNS_RESOLVERS:-1.1.1.1,9.9.9.9}"
 
