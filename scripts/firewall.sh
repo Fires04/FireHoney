@@ -7,7 +7,9 @@
 # Loki, Promtail, session-generator) has no route to the internet at
 # all. Inbound new connections to Cowrie are also capped at 4/day per
 # source IP, to keep one scanning campaign from flooding you with
-# hundreds of near-identical sessions.
+# hundreds of near-identical sessions, and IPs in the "cowrie-blocklist"
+# ipset (populated by scripts/update-blocklist.sh from public
+# known-scanner feeds) are dropped outright.
 #
 # Run with: sudo ./scripts/firewall.sh   (or `make firewall`)
 # Requires: docker compose already running (needs COWRIE_IP from .env)
@@ -37,13 +39,38 @@ set +a
 
 IFS=',' read -ra RESOLVERS <<< "${DNS_RESOLVERS:-1.1.1.1,9.9.9.9}"
 
+# The blocklist ipset is populated separately (scripts/update-blocklist.sh);
+# here we only make sure it exists so the iptables rule below doesn't
+# fail to load on a box where update-blocklist.sh hasn't run yet.
+if command -v ipset >/dev/null 2>&1; then
+  ipset create cowrie-blocklist hash:ip hashsize 16384 maxelem 300000 -exist
+else
+  echo "[!] ipset not installed -- skipping the known-scanner blocklist rule." >&2
+  echo "    Run: apt install ipset && sudo ./scripts/update-blocklist.sh" >&2
+fi
+
 echo "[*] Creating/flushing the DOCKER-USER chain..."
 iptables -N DOCKER-USER 2>/dev/null || iptables -F DOCKER-USER
 
 # 1) Return traffic always gets through.
 iptables -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-# 2) Rate-limit new inbound connections to Cowrie, per source IP --
+# 2) Drop new connections from known-scanner IPs outright (see
+#    scripts/update-blocklist.sh -- run it at least once, then on a
+#    schedule, see docs/SECURITY.md). Skipped entirely if ipset isn't
+#    installed.
+if command -v ipset >/dev/null 2>&1; then
+  iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dports 2222,2223 \
+    -m set --match-set cowrie-blocklist src \
+    -m conntrack --ctstate NEW \
+    -j LOG --log-prefix "COWRIE-BLOCKLIST-DROP: "
+  iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dports 2222,2223 \
+    -m set --match-set cowrie-blocklist src \
+    -m conntrack --ctstate NEW \
+    -j DROP
+fi
+
+# 3) Rate-limit new inbound connections to Cowrie, per source IP --
 #    max 4 sessions/day per IP, everything past that from the same IP
 #    is logged and dropped before it ever reaches the container. Real
 #    scanning campaigns (Mirai/Gafgyt-style bots) otherwise reconnect
@@ -63,10 +90,10 @@ iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dp
   --hashlimit-above 4/day --hashlimit-burst 4 --hashlimit-htable-expire 86400000 \
   -j DROP
 
-# 3) Traffic arriving from WAN is left to Docker's own DNAT logic.
+# 4) Traffic arriving from WAN is left to Docker's own DNAT logic.
 iptables -A DOCKER-USER -i "$WAN_IFACE" -j RETURN
 
-# 4) Cowrie may open new outbound connections only on tcp/80,443,
+# 5) Cowrie may open new outbound connections only on tcp/80,443,
 #    rate-limited and logged.
 iptables -A DOCKER-USER -s "$COWRIE_IP" -o "$WAN_IFACE" -p tcp -m multiport --dports 80,443 \
   -m conntrack --ctstate NEW \
@@ -81,7 +108,7 @@ iptables -A DOCKER-USER -s "$COWRIE_IP" -o "$WAN_IFACE" -p tcp -m multiport --dp
 iptables -A DOCKER-USER -s "$COWRIE_IP" -o "$WAN_IFACE" -p tcp -m multiport --dports 80,443 \
   -m conntrack --ctstate NEW -j ACCEPT
 
-# 5) DNS for Cowrie only to the configured resolvers.
+# 6) DNS for Cowrie only to the configured resolvers.
 for r in "${RESOLVERS[@]}"; do
   iptables -A DOCKER-USER -s "$COWRIE_IP" -o "$WAN_IFACE" -d "$r" -p udp --dport 53 \
     -m conntrack --ctstate NEW -j ACCEPT
@@ -89,13 +116,13 @@ for r in "${RESOLVERS[@]}"; do
     -m conntrack --ctstate NEW -j ACCEPT
 done
 
-# 6) Anything else from the honeypot subnet outbound = tripwire (log + drop).
+# 7) Anything else from the honeypot subnet outbound = tripwire (log + drop).
 iptables -A DOCKER-USER -s "$COWRIE_EGRESS_SUBNET" -o "$WAN_IFACE" \
   -m conntrack --ctstate NEW -j LOG --log-prefix "HONEYPOT-EGRESS-BLOCKED: " --log-level 4
 iptables -A DOCKER-USER -s "$COWRIE_EGRESS_SUBNET" -o "$WAN_IFACE" \
   -m conntrack --ctstate NEW -j DROP
 
-# 7) Grafana/session-viewer/session-generator subnet -- exists only
+# 8) Grafana/session-viewer/session-generator subnet -- exists only
 #    because of the Docker port-publish mechanism, never needs
 #    anything outbound.
 iptables -A DOCKER-USER -s "$MGMT_PUBLISH_SUBNET" -o "$WAN_IFACE" \
@@ -111,14 +138,21 @@ cat <<EOF
 --- IMPORTANT ---
 1) These rules don't survive a reboot without "iptables-persistent":
      apt install iptables-persistent && netfilter-persistent save
-2) Restrict admin access (SSH, Grafana port ${GRAFANA_PORT:-3000},
+   The "cowrie-blocklist" ipset needs the same treatment:
+     apt install ipset-persistent && netfilter-persistent save
+   (if ipset-persistent isn't packaged for your distro, a cron job
+   running update-blocklist.sh at boot achieves the same thing)
+2) Run scripts/update-blocklist.sh at least once (needs "ipset"
+   installed), then schedule it (cron example in docs/SECURITY.md) --
+   this script only ensures the ipset *exists*, it doesn't populate it.
+3) Restrict admin access (SSH, Grafana port ${GRAFANA_PORT:-3000},
    session-viewer port ${SESSION_VIEWER_PORT:-8080}) at your
    network/router level to ADMIN_CIDR=${ADMIN_CIDR} only -- this
    script only handles outbound traffic from containers, not who's
    allowed in on the admin ports.
-3) Watch for "HONEYPOT-EGRESS-BLOCKED" / "MGMT-EGRESS-BLOCKED" in the
+4) Watch for "HONEYPOT-EGRESS-BLOCKED" / "MGMT-EGRESS-BLOCKED" in the
    log (journalctl -k) -- any occurrence means investigate it as a
    suspected emulation escape or misconfiguration.
-4) After every "docker compose pull" (image update), re-run this
+5) After every "docker compose pull" (image update), re-run this
    script so the rules match the current docker network.
 EOF

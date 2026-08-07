@@ -24,6 +24,10 @@ now-unmaintained [HoneyDrive](https://sourceforge.net/projects/honeydrive/).
 - **Strict egress firewall** -- the honeypot container can't reach
   anywhere outbound except one precisely defined exception (malware
   sample downloads)
+- **Noise reduction** -- inbound sessions capped at 4/day per source
+  IP, plus an optional known-scanner IP blocklist (`blocklist.de`,
+  `danger.rulez.sk`), so one scanning campaign doesn't drown out
+  everything else in the capture
 - Everything configurable from a single `.env` file
 
 ## Quick start
@@ -37,6 +41,7 @@ $EDITOR .env              # set passwords, WAN_IFACE, ADMIN_CIDR
 make setup                # htpasswd, asciinema-player, docker pull
 make fakefs                # (recommended) realistic fake filesystem
 make up                    # bring up the whole stack
+sudo apt install ipset && sudo make update-blocklist  # (recommended) known-scanner blocklist
 sudo make firewall         # egress lockdown
 
 # Grafana:         http://SERVER_IP:3000

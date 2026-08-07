@@ -55,6 +55,8 @@ Full description of every variable: [CONFIGURATION.md](CONFIGURATION.md)
 make setup       # htpasswd, asciinema-player, docker pull
 make fakefs        # (recommended) realistic fake filesystem -- see ANTI-DETECTION.md
 make up             # bring up the whole stack
+sudo apt install ipset
+sudo make update-blocklist  # (recommended) known-scanner IP blocklist -- see SECURITY.md
 sudo make firewall
 ```
 

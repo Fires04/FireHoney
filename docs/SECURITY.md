@@ -38,6 +38,39 @@ emulation escape or a misconfiguration.
 - The real SSH for VM administration -- also `ADMIN_CIDR` only, never
   from WAN.
 
+## Known-scanner blocklist
+
+`scripts/update-blocklist.sh` pulls free, no-signup feeds of IPs
+already reported doing SSH/Telnet brute-forcing or generic
+login-attack bot behavior elsewhere on the internet
+(`blocklist.de`, `danger.rulez.sk`) into an `ipset` called
+`cowrie-blocklist`. `scripts/firewall.sh` drops any new connection
+from that set before it reaches Cowrie (`COWRIE-BLOCKLIST-DROP` in
+the log) -- repeat automated scanners stop showing up in the capture
+at all, on top of the 4/day-per-IP cap.
+
+This is a lagging signal (an IP has to be reported elsewhere first),
+not a filter on your own data -- it never blocks an IP based on
+anything it did *here*, only on its reputation elsewhere. A genuine
+human attacker, or a brand-new bot IP nobody's reported yet, still
+gets through untouched.
+
+Setup:
+```bash
+sudo apt install ipset
+sudo make update-blocklist   # populate it the first time
+sudo make firewall           # (re-)apply the DOCKER-USER rule that uses it
+```
+
+Keep it current with a cron entry (`sudo crontab -e`):
+```cron
+0 4 * * * /path/to/cowrie-honeypot-stack/scripts/update-blocklist.sh >> /var/log/cowrie-blocklist.log 2>&1
+```
+
+The ipset itself needs `ipset-persistent` (or an `@reboot` cron entry
+running `update-blocklist.sh`) to survive a reboot -- see the output
+of `scripts/firewall.sh` for details.
+
 ## Checklist before exposing to the internet
 
 - [ ] The VM is dedicated, isolated (VLAN recommended) -- no access to the rest of your network

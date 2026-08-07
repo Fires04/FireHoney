@@ -1,4 +1,4 @@
-.PHONY: setup up down restart logs ps firewall fakefs sessions reset-cowrie pull update
+.PHONY: setup up down restart logs ps firewall update-blocklist fakefs sessions reset-cowrie pull update
 
 setup:      ## First-time setup (htpasswd, asciinema-player, docker pull)
 	./scripts/setup.sh
@@ -23,6 +23,9 @@ ps:         ## Container status
 
 firewall:   ## Apply the egress lockdown (needs root)
 	sudo ./scripts/firewall.sh
+
+update-blocklist: ## Refresh the known-scanner IP blocklist (needs root, ipset)
+	sudo ./scripts/update-blocklist.sh
 
 fakefs:     ## Generate a realistic fake filesystem (config/cowrie/fs.pickle)
 	./scripts/build-fakefs.sh
