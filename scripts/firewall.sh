@@ -5,7 +5,9 @@
 # tcp/80,443 (downloading malware samples on the attacker's command),
 # rate-limited and logged. Everything else (Grafana, session-viewer,
 # Loki, Promtail, session-generator) has no route to the internet at
-# all.
+# all. Inbound new connections to Cowrie are also rate-limited per
+# source IP, to keep one aggressive scanner from flooding you with
+# hundreds of near-identical sessions.
 #
 # Run with: sudo ./scripts/firewall.sh   (or `make firewall`)
 # Requires: docker compose already running (needs COWRIE_IP from .env)
@@ -41,10 +43,29 @@ iptables -N DOCKER-USER 2>/dev/null || iptables -F DOCKER-USER
 # 1) Return traffic always gets through.
 iptables -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-# 2) Traffic arriving from WAN is left to Docker's own DNAT logic.
+# 2) Rate-limit new inbound connections to Cowrie, per source IP --
+#    one hit every ~60s with a burst of 3, everything past that from
+#    the same IP is logged and dropped before it ever reaches the
+#    container. This just trims repeat hits from the same aggressive
+#    scanner; it doesn't reduce the diversity of who gets captured
+#    (every new IP still gets its burst), and it's normal-looking --
+#    real servers rate-limit new connections too. Tune the numbers
+#    below if 1/minute is too tight or too loose for your traffic.
+iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dports 2222,2223 \
+  -m conntrack --ctstate NEW \
+  -m hashlimit --hashlimit-name cowrie-inbound --hashlimit-mode srcip \
+  --hashlimit-above 1/minute --hashlimit-burst 3 --hashlimit-htable-expire 60000 \
+  -j LOG --log-prefix "COWRIE-INBOUND-RATELIMIT-DROP: "
+iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dports 2222,2223 \
+  -m conntrack --ctstate NEW \
+  -m hashlimit --hashlimit-name cowrie-inbound --hashlimit-mode srcip \
+  --hashlimit-above 1/minute --hashlimit-burst 3 --hashlimit-htable-expire 60000 \
+  -j DROP
+
+# 3) Traffic arriving from WAN is left to Docker's own DNAT logic.
 iptables -A DOCKER-USER -i "$WAN_IFACE" -j RETURN
 
-# 3) Cowrie may open new outbound connections only on tcp/80,443,
+# 4) Cowrie may open new outbound connections only on tcp/80,443,
 #    rate-limited and logged.
 iptables -A DOCKER-USER -s "$COWRIE_IP" -o "$WAN_IFACE" -p tcp -m multiport --dports 80,443 \
   -m conntrack --ctstate NEW \
@@ -59,7 +80,7 @@ iptables -A DOCKER-USER -s "$COWRIE_IP" -o "$WAN_IFACE" -p tcp -m multiport --dp
 iptables -A DOCKER-USER -s "$COWRIE_IP" -o "$WAN_IFACE" -p tcp -m multiport --dports 80,443 \
   -m conntrack --ctstate NEW -j ACCEPT
 
-# 4) DNS for Cowrie only to the configured resolvers.
+# 5) DNS for Cowrie only to the configured resolvers.
 for r in "${RESOLVERS[@]}"; do
   iptables -A DOCKER-USER -s "$COWRIE_IP" -o "$WAN_IFACE" -d "$r" -p udp --dport 53 \
     -m conntrack --ctstate NEW -j ACCEPT
@@ -67,13 +88,13 @@ for r in "${RESOLVERS[@]}"; do
     -m conntrack --ctstate NEW -j ACCEPT
 done
 
-# 5) Anything else from the honeypot subnet outbound = tripwire (log + drop).
+# 6) Anything else from the honeypot subnet outbound = tripwire (log + drop).
 iptables -A DOCKER-USER -s "$COWRIE_EGRESS_SUBNET" -o "$WAN_IFACE" \
   -m conntrack --ctstate NEW -j LOG --log-prefix "HONEYPOT-EGRESS-BLOCKED: " --log-level 4
 iptables -A DOCKER-USER -s "$COWRIE_EGRESS_SUBNET" -o "$WAN_IFACE" \
   -m conntrack --ctstate NEW -j DROP
 
-# 6) Grafana/session-viewer/session-generator subnet -- exists only
+# 7) Grafana/session-viewer/session-generator subnet -- exists only
 #    because of the Docker port-publish mechanism, never needs
 #    anything outbound.
 iptables -A DOCKER-USER -s "$MGMT_PUBLISH_SUBNET" -o "$WAN_IFACE" \
