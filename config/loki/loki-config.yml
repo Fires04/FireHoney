@@ -2,6 +2,14 @@ auth_enabled: false
 
 server:
   http_listen_port: 3100
+  # Default gRPC message cap (4MB) is too small for a raw log-line
+  # query returning a few thousand lines (Explore does this by
+  # default) -- without this, those queries fail internally with
+  # "received message larger than max" and just look like a timeout
+  # to Grafana. This is all loopback traffic inside one container, so
+  # there's no real cost to raising it.
+  grpc_server_max_recv_msg_size: 104857600
+  grpc_server_max_send_msg_size: 104857600
 
 common:
   path_prefix: /loki
@@ -14,6 +22,24 @@ common:
     instance_addr: 127.0.0.1
     kvstore:
       store: inmemory
+
+# The internal querier<->frontend/scheduler gRPC hop (still present
+# even in single-binary mode) has its own message-size limit,
+# separate from the server one above -- same failure mode, same fix.
+frontend:
+  grpc_client_config:
+    max_send_msg_size: 104857600
+    max_recv_msg_size: 104857600
+
+frontend_worker:
+  grpc_client_config:
+    max_send_msg_size: 104857600
+    max_recv_msg_size: 104857600
+
+query_scheduler:
+  grpc_client_config:
+    max_send_msg_size: 104857600
+    max_recv_msg_size: 104857600
 
 schema_config:
   configs:
