@@ -149,13 +149,39 @@ there. Comes from `<hash>.commands.json`, written by
 `generate-sessions.py` alongside the `.cast` file. No configuration
 needed.
 
-## `config/grafana/provisioning/dashboards/cowrie-overview.json`
+## `config/grafana/provisioning/dashboards/` -- three dashboards
 
-The dashboard loads automatically when Grafana starts (file-based
-provisioning). Edit the JSON directly, or edit it in the Grafana UI
-and export it back (Dashboard settings → JSON Model) -- just watch
-the `"datasource": {"uid": "loki"}` reference, it must stay `loki`
-(matches `config/grafana/provisioning/datasources/loki.yaml`).
+All three load automatically when Grafana starts (file-based
+provisioning, see `dashboards.yaml` in that folder -- any `.json`
+dropped there is picked up, no extra config needed). Edit the JSON
+directly, or edit it in the Grafana UI and export it back (Dashboard
+settings → JSON Model) -- just watch the `"datasource": {"uid":
+"loki"}` reference, it must stay `loki` (matches
+`config/grafana/provisioning/datasources/loki.yaml`).
+
+- **`cowrie-overview.json`** -- the default home dashboard: login
+  attempts over time, top usernames/passwords, top commands,
+  attacking IPs, the GeoIP map, live log streams. General-purpose
+  stats.
+- **`cowrie-live-ops.json`** -- a "NOC screen" view: approximate
+  active-session count, connection/command rate, a live feed of new
+  sessions. Refreshes every 5s. For watching the honeypot right now,
+  not for historical analysis.
+- **`cowrie-human-hunt.json`** -- built specifically to find real
+  people, not scripted bots, in the capture. The vast majority of
+  traffic on any public honeypot is Mirai/Gafgyt-style scanners that
+  connect, run the same handful of fingerprinting commands in under a
+  second, and disconnect -- this dashboard ranks sessions by duration
+  and by *distinct* command count (bots repeat the same commands; a
+  session with many different commands suggests someone actually
+  exploring). These are heuristics, not proof -- the dashboard's own
+  top panel explains the reasoning and tells you to confirm by
+  watching the replay in the session viewer before concluding
+  anything. Its "Session profiler" panel (duration + distinct commands
+  joined into one table) relies on Grafana's outer-join transform and
+  is marked experimental in its own description -- the two simple
+  single-metric tables next to it are the reliable fallback if the
+  join renders oddly on your Grafana version.
 
 ## `config/nginx/session-viewer.conf`
 

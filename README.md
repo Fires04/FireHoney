@@ -11,8 +11,11 @@ now-unmaintained [HoneyDrive](https://sourceforge.net/projects/honeydrive/).
 
 - **Cowrie** -- an emulated SSH/Telnet honeypot (the attacker never gets
   a real shell, just a convincing imitation of one)
-- **Grafana dashboard** -- ready on first boot (auto-provisioning), live
-  graphs of login attempts, top passwords, command stream
+- **Three Grafana dashboards** -- ready on first boot (auto-provisioning):
+  *Overview* (login attempts, top credentials/commands, attacker map),
+  *Live Ops* (active sessions, connection rate, live feed), and
+  *Human Hunt* (surfaces the rare real-person session buried in bot
+  noise, by session duration and command diversity)
 - **Web-based session playback** -- self-hosted (asciinema-player), no
   CDN, no SSH or terminal needed
 - **Realistic fake filesystem** -- generated from an actual Debian

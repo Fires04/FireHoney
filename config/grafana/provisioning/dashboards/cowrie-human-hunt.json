@@ -1,0 +1,408 @@
+{
+  "id": null,
+  "uid": "cowrie-human-hunt",
+  "title": "Cowrie Honeypot — Human Hunt",
+  "description": "Surfaces sessions that look like a person at a keyboard, not a scripted scanner, so real attacks don't get lost in bot noise.",
+  "tags": [
+    "cowrie",
+    "honeypot",
+    "human"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "How to use this dashboard",
+      "type": "text",
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Scripted bots (Mirai/Gafgyt-style scanners, which make up the vast majority of traffic on any public SSH/Telnet honeypot) almost always do the same thing: connect, run the same 3-6 fingerprinting commands in well under a second, and disconnect. A real person behind a keyboard looks different -- typing has human latency, sessions run longer, and the commands vary because they're actually looking around.\n\n**None of the signals below prove a human was involved -- they just tell you where to look first.** A slow network can inflate duration, and some bot families do run more than one command. Always confirm by opening the session in the [session viewer](../../webui/) and watching the actual replay before drawing conclusions.\n\n- **Duration** -- typical bot sessions are under 5 seconds. Anything over ~20-30s is worth a look.\n- **Distinct commands** -- bots repeat the same handful of commands (often just 1-4, always the same ones). Sessions with many *different* commands suggest someone exploring rather than running a fixed script.\n\nDefault time range here is 7 days (real human intrusion attempts are much rarer than bot scans -- a 24h window may simply have none)."
+      }
+    },
+    {
+      "id": 20,
+      "title": "Candidates",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      }
+    },
+    {
+      "id": 2,
+      "title": "Longest sessions",
+      "description": "Sorted by session duration, descending. Bot sessions almost never make it past a few seconds.",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Duration (s)"
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "src_ip"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "topk(50, sum by (session, src_ip) (sum_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.session.closed\" | unwrap duration [$__range])))",
+          "refId": "A",
+          "instant": true,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Most exploratory sessions (distinct commands)",
+      "description": "Number of DIFFERENT commands run per session, not total commands. Bots repeat the same fixed sequence; a high distinct count means someone was actually looking around.",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Distinct commands"
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "src_ip"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "topk(50, count by (session, src_ip) (sum by (session, src_ip, input) (count_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.command.input\" | input != \"\" [$__range]))))",
+          "refId": "A",
+          "instant": true,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "title": "Combined profile (experimental)",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      }
+    },
+    {
+      "id": 4,
+      "title": "Session profiler -- duration + distinct commands side by side",
+      "description": "Joins the two tables above by session ID. This relies on Grafana's outer-join transform and hasn't been screenshot-verified across Grafana versions -- if the columns look wrong or duplicated, open this panel's edit view and check the 'Outer join' transformation; the two simple tables above are the reliable fallback.",
+      "type": "table",
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Duration (s)"
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Distinct commands"
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "src_ip"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "session",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Distinct commands",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "topk(50, sum by (session, src_ip) (sum_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.session.closed\" | unwrap duration [$__range])))",
+          "refId": "A",
+          "instant": true,
+          "queryType": "instant",
+          "format": "table"
+        },
+        {
+          "expr": "topk(50, count by (session, src_ip) (sum by (session, src_ip, input) (count_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.command.input\" | input != \"\" [$__range]))))",
+          "refId": "B",
+          "instant": true,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "title": "Study a candidate",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      }
+    },
+    {
+      "id": 5,
+      "title": "Next step",
+      "type": "text",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Found a session ID worth checking above? Open the session viewer (`SESSION_VIEWER_PORT`, default 8080) and find that session in the list, or search this session ID directly in Explore: `{job=\"cowrie\"} | json | session=\"<id>\"` to read every event in order."
+      }
+    },
+    {
+      "id": 6,
+      "title": "All commands for the selected time range (longest sessions first is above -- use this to read a session's full command flow)",
+      "type": "logs",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "sortOrder": "Ascending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "expr": "{job=\"cowrie\"} | json | eventid=\"cowrie.command.input\" | line_format \"[{{.session}}] {{.src_ip}} > {{.input}}\"",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
