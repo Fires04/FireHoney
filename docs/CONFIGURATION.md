@@ -81,27 +81,65 @@ volume from ordinary bots. See the discussion in
 ## `config/promtail/promtail-config.yml` -- optional GeoIP + attack map
 
 The dashboard's "Attack origin map" panel needs GeoIP enabled to have
-any data:
+any data. Two database options, both free, in the same MaxMind DB
+(`.mmdb`) format Promtail's `geoip` stage expects:
 
-1. Download `GeoLite2-City.mmdb` for free (registration required) at
-   [maxmind.com](https://www.maxmind.com/)
-2. Save it to `config/promtail/GeoLite2-City.mmdb`
-3. Uncomment **both** the `geoip` and `structured_metadata` stages in
+**Option A -- DB-IP City Lite (no account needed, recommended if you
+don't want to register anywhere):**
+```bash
+curl -fsSL -o config/promtail/GeoLite2-City.mmdb.gz \
+  "https://download.db-ip.com/free/dbip-city-lite-$(date +%Y-%m).mmdb.gz"
+gunzip config/promtail/GeoLite2-City.mmdb.gz
+```
+Verified working: same field names as MaxMind
+(`geoip_city_name`, `geoip_country_name`, `geoip_location_latitude`,
+`geoip_location_longitude`, etc.) -- drop-in compatible with the
+pipeline stages below, no config changes needed. Free tier is
+CC BY 4.0 licensed -- if you publish anything derived from this data,
+credit [DB-IP.com](https://db-ip.com/). Updated monthly; re-run the
+command above periodically (the URL includes the year-month, e.g.
+`dbip-city-lite-2026-08.mmdb.gz`) to refresh it.
+
+**Option B -- MaxMind GeoLite2 (free, requires creating an account):**
+Download `GeoLite2-City.mmdb` at [maxmind.com](https://www.maxmind.com/),
+save it to the same path: `config/promtail/GeoLite2-City.mmdb`.
+
+Either way, once the file is in place:
+
+1. Uncomment **both** the `geoip` and `structured_metadata` stages in
    `promtail-config.yml` (they must be used together -- lat/lon are
    high-cardinality per-event values, so they go in as Loki
    structured metadata, not labels; see the comment in the file)
-4. `docker compose restart promtail`
+2. `docker compose restart promtail`
 
 Works entirely locally against the downloaded DB file, no outbound
 queries at lookup time.
 
-**Status:** this pairing (geoip stage → structured_metadata → Grafana
-Geomap panel) is wired up but hasn't been exercised end-to-end against
-a real MaxMind DB yet -- I didn't have a database file or live cluster
-access to verify it while building it. Once you've enabled it, check:
-- `docker logs cowrie-promtail` for geoip/parsing errors
-- In Grafana Explore (Loki datasource): `{job="cowrie"} | json | eventid="cowrie.session.connect"` and confirm `geoip_location_latitude`/`geoip_location_longitude` show up
-- If the map panel stays empty despite that, the panel's `layers[0].location.latitudeField`/`longitudeField` names in `cowrie-overview.json` are the most likely thing to need adjusting to match your Grafana version's Geomap schema.
+**Status: verified end-to-end** against a live stack (DB-IP City Lite
+database, real Loki + Grafana instance, a synthetic log line with a
+real public IP injected into a running Cowrie's log):
+- `geoip` stage extraction: confirmed correct (`geoip_city_name`,
+  `geoip_country_name`, `geoip_location_latitude`,
+  `geoip_location_longitude` all populated with correct values)
+- `structured_metadata` ingestion into Loki: confirmed (non-zero
+  `structuredMetadataBytesProcessed` in query stats, fields present
+  on the returned stream)
+- The dashboard's exact Geomap aggregation query
+  (`sum by (src_ip, geoip_country_name, geoip_city_name,
+  geoip_location_latitude, geoip_location_longitude) (...)`) returns
+  correctly grouped rows with real coordinates
+
+Not independently confirmed: that Grafana's Geomap panel visually
+places the marker correctly (didn't have a browser screenshot in the
+loop) -- but the panel gets fully populated, correctly-shaped data,
+so this should render with `cowrie-overview.json`'s
+`layers[0].location.latitudeField`/`longitudeField` config as-is on
+any reasonably current Grafana version.
+
+Note: private/RFC1918 source IPs (e.g. testing from your own LAN) have
+no GeoIP entry, by design -- those rows just won't carry the
+`geoip_*` fields. That's expected, not a bug; you'll see real markers
+once actual internet traffic hits Cowrie.
 
 ## `webui/player.html` -- per-session command list
 

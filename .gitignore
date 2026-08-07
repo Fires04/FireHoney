@@ -8,6 +8,9 @@ webui/assets/asciinema-player.min.js
 webui/assets/asciinema-player.css
 config/nginx/htpasswd
 config/cowrie/fs.pickle
+config/promtail/GeoLite2-City.mmdb
+config/promtail/*.mmdb
+config/promtail/*.mmdb.gz
 
 # Temporary files from build scripts
 .fakefs-tmp/

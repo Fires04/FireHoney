@@ -26,32 +26,27 @@ scrape_configs:
             input: input
             timestamp: timestamp
 
-      # Optional GeoIP enrichment, purely local from a MaxMind DB (no
-      # outbound queries). Requires downloading GeoLite2-City.mmdb
-      # (free with registration at maxmind.com) into
-      # config/promtail/GeoLite2-City.mmdb. Uncomment both stages
-      # below once the file is there (also needs
-      # limits_config.allow_structured_metadata: true in
-      # config/loki/loki-config.yml, already set).
+      # GeoIP enrichment, purely local from a MaxMind-format DB (no
+      # outbound queries). See docs/CONFIGURATION.md for where to get
+      # a free DB (no account needed via DB-IP, or MaxMind with a
+      # free account) -- put it at config/promtail/GeoLite2-City.mmdb.
       #
       # NOTE: lat/lon go in as structured metadata, NOT as labels --
       # they're per-event, high-cardinality values, and Loki labels
       # must stay low-cardinality or ingestion performance falls
       # over. structured_metadata is Loki's mechanism for exactly
-      # this: queryable per-line data that isn't part of the index.
-      # This pairing (geoip -> structured_metadata) hasn't been
-      # exercised against a real MaxMind DB yet -- see
-      # docs/CONFIGURATION.md for how to verify it once enabled.
-      #
-      # - geoip:
-      #     db: /etc/promtail/GeoLite2-City.mmdb   # <- put the file here
-      #     source: src_ip
-      #     db_type: city
-      # - structured_metadata:
-      #     geoip_city_name:
-      #     geoip_country_name:
-      #     geoip_location_latitude:
-      #     geoip_location_longitude:
+      # this: queryable per-line data that isn't part of the index
+      # (also needs limits_config.allow_structured_metadata: true in
+      # config/loki/loki-config.yml, already set).
+      - geoip:
+          db: /etc/promtail/GeoLite2-City.mmdb
+          source: src_ip
+          db_type: city
+      - structured_metadata:
+          geoip_city_name:
+          geoip_country_name:
+          geoip_location_latitude:
+          geoip_location_longitude:
 
       - labels:
           eventid:
