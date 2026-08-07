@@ -1,4 +1,4 @@
-.PHONY: setup up down restart logs ps firewall update-blocklist fakefs sessions reset-cowrie pull update
+.PHONY: setup up down restart logs ps firewall update-blocklist fakefs sessions reset-cowrie reset-data pull update
 
 setup:      ## First-time setup (htpasswd, asciinema-player, docker pull)
 	./scripts/setup.sh
@@ -14,6 +14,12 @@ restart:    ## Restart all services
 
 reset-cowrie: ## Restart just Cowrie (e.g. after changing cowrie.cfg/userdb.txt/fs.pickle)
 	docker compose restart cowrie
+
+reset-data: ## Wipe ALL captured data (Loki logs, sessions, replays, Grafana state) and start fresh -- irreversible
+	docker compose down -v
+	rm -rf webui/casts/* webui/index.html
+	docker compose up -d
+	@echo "Data wiped, stack restarted clean. If networks were recreated, re-run: sudo make firewall"
 
 logs:       ## Live logs from all services
 	docker compose logs -f
