@@ -51,18 +51,8 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
+            "mode": "fixed",
+            "fixedColor": "green"
           }
         },
         "overrides": []
@@ -87,6 +77,15 @@
       "datasource": {
         "type": "loki",
         "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          }
+        },
+        "overrides": []
       },
       "targets": [
         {
@@ -117,6 +116,19 @@
       ]
     },
     {
+      "id": 20,
+      "title": "Overview",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
       "id": 5,
       "title": "Login attempts over time (success vs. failure)",
       "type": "timeseries",
@@ -124,80 +136,86 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 5
       },
       "datasource": {
         "type": "loki",
         "uid": "loki"
       },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 0,
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*success.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*failed.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
       "targets": [
         {
-          "expr": "sum by (eventid) (count_over_time({job=\"cowrie\"} | json | eventid=~\"cowrie.login.*\" [1m]))",
+          "expr": "sum by (eventid) (count_over_time({job=\"cowrie\"} | json | eventid=~\"cowrie.login.*\" [$__interval]))",
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 21,
+      "title": "Logins — what's being tried",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      }
     },
     {
       "id": 6,
-      "title": "Live stream — commands run by attackers",
-      "type": "logs",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 12
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "options": {
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "expr": "{job=\"cowrie\"} | json | eventid=\"cowrie.command.input\" | line_format \"{{.src_ip}} > {{.input}}\"",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 7,
-      "title": "Live stream — all events",
-      "type": "logs",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 12
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "options": {
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "targets": [
-        {
-          "expr": "{job=\"cowrie\"} | json | line_format \"[{{.eventid}}] {{.src_ip}} — {{.message}}\"",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 8,
-      "title": "Most common username/password combos (selected period)",
+      "title": "Top usernames tried (selected period)",
       "type": "table",
       "gridPos": {
-        "h": 10,
-        "w": 24,
+        "h": 8,
+        "w": 12,
         "x": 0,
-        "y": 20
+        "y": 14
       },
       "datasource": {
         "type": "loki",
@@ -218,7 +236,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Attempt count"
+                "value": "Attempts"
               },
               {
                 "id": "custom.align",
@@ -229,12 +247,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "eventid"
+              "options": "username"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "Result"
+                "value": "Username"
               }
             ]
           }
@@ -266,7 +284,7 @@
       ],
       "targets": [
         {
-          "expr": "topk(20, sum by (username, password, eventid) (count_over_time({job=\"cowrie\"} | json | eventid=~\"cowrie.login.*\" [$__range])))",
+          "expr": "topk(15, sum by (username) (count_over_time({job=\"cowrie\"} | json | eventid=~\"cowrie.login.*\" [$__range])))",
           "refId": "A",
           "instant": true,
           "queryType": "instant",
@@ -275,14 +293,112 @@
       ]
     },
     {
-      "id": 9,
+      "id": 7,
+      "title": "Top passwords tried (selected period)",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Attempts"
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "password"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Password"
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "topk(15, sum by (password) (count_over_time({job=\"cowrie\"} | json | eventid=~\"cowrie.login.*\" [$__range])))",
+          "refId": "A",
+          "instant": true,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "title": "Commands — what's being run",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      }
+    },
+    {
+      "id": 8,
       "title": "Most common commands run by attackers (selected period)",
       "type": "table",
       "gridPos": {
         "h": 10,
-        "w": 24,
+        "w": 16,
         "x": 0,
-        "y": 30
+        "y": 23
       },
       "datasource": {
         "type": "loki",
@@ -351,7 +467,7 @@
       ],
       "targets": [
         {
-          "expr": "topk(25, sum by (input) (count_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.command.input\" [$__range])))",
+          "expr": "topk(25, sum by (input) (count_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.command.input\" | input != \"\" [$__range])))",
           "refId": "A",
           "instant": true,
           "queryType": "instant",
@@ -360,14 +476,54 @@
       ]
     },
     {
+      "id": 9,
+      "title": "Live commands (deduped)",
+      "type": "logs",
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "dedupStrategy": "exact"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"cowrie\"} | json | eventid=\"cowrie.command.input\" | line_format \"{{.src_ip}} > {{.input}}\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "title": "Sessions — who and how long",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      }
+    },
+    {
       "id": 10,
       "title": "Attacking IPs (selected period)",
       "type": "table",
       "gridPos": {
         "h": 10,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 40
+        "y": 34
       },
       "datasource": {
         "type": "loki",
@@ -446,13 +602,80 @@
     },
     {
       "id": 11,
+      "title": "Recently closed sessions (dedup by IP+duration)",
+      "type": "logs",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "dedupStrategy": "exact"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"cowrie\"} | json | eventid=\"cowrie.session.closed\" | line_format \"{{.src_ip}} -- session {{.session}} -- {{.duration}}s\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "title": "Live feed & origin",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      }
+    },
+    {
+      "id": 12,
+      "title": "Live stream — all events",
+      "type": "logs",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "dedupStrategy": "exact"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"cowrie\"} | json | line_format \"[{{.eventid}}] {{.src_ip}} — {{.message}}\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
       "title": "Attack origin map (needs GeoIP enabled -- see docs/CONFIGURATION.md)",
       "type": "geomap",
       "gridPos": {
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 54
       },
       "datasource": {
         "type": "loki",

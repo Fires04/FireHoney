@@ -5,8 +5,8 @@
 # tcp/80,443 (downloading malware samples on the attacker's command),
 # rate-limited and logged. Everything else (Grafana, session-viewer,
 # Loki, Promtail, session-generator) has no route to the internet at
-# all. Inbound new connections to Cowrie are also rate-limited per
-# source IP, to keep one aggressive scanner from flooding you with
+# all. Inbound new connections to Cowrie are also capped at 4/day per
+# source IP, to keep one scanning campaign from flooding you with
 # hundreds of near-identical sessions.
 #
 # Run with: sudo ./scripts/firewall.sh   (or `make firewall`)
@@ -44,22 +44,23 @@ iptables -N DOCKER-USER 2>/dev/null || iptables -F DOCKER-USER
 iptables -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
 # 2) Rate-limit new inbound connections to Cowrie, per source IP --
-#    one hit every ~60s with a burst of 3, everything past that from
-#    the same IP is logged and dropped before it ever reaches the
-#    container. This just trims repeat hits from the same aggressive
-#    scanner; it doesn't reduce the diversity of who gets captured
-#    (every new IP still gets its burst), and it's normal-looking --
-#    real servers rate-limit new connections too. Tune the numbers
-#    below if 1/minute is too tight or too loose for your traffic.
+#    max 4 sessions/day per IP, everything past that from the same IP
+#    is logged and dropped before it ever reaches the container. Real
+#    scanning campaigns (Mirai/Gafgyt-style bots) otherwise reconnect
+#    every few seconds and flood the capture with hundreds of
+#    identical sessions from one source -- this caps that without
+#    reducing how many distinct attackers get through (every new IP
+#    still gets its own 4). Tune --hashlimit-above/--hashlimit-burst
+#    below if 4/day is too tight or too loose for your traffic.
 iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dports 2222,2223 \
   -m conntrack --ctstate NEW \
   -m hashlimit --hashlimit-name cowrie-inbound --hashlimit-mode srcip \
-  --hashlimit-above 1/minute --hashlimit-burst 3 --hashlimit-htable-expire 60000 \
+  --hashlimit-above 4/day --hashlimit-burst 4 --hashlimit-htable-expire 86400000 \
   -j LOG --log-prefix "COWRIE-INBOUND-RATELIMIT-DROP: "
 iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dports 2222,2223 \
   -m conntrack --ctstate NEW \
   -m hashlimit --hashlimit-name cowrie-inbound --hashlimit-mode srcip \
-  --hashlimit-above 1/minute --hashlimit-burst 3 --hashlimit-htable-expire 60000 \
+  --hashlimit-above 4/day --hashlimit-burst 4 --hashlimit-htable-expire 86400000 \
   -j DROP
 
 # 3) Traffic arriving from WAN is left to Docker's own DNAT logic.

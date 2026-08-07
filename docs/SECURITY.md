@@ -24,12 +24,12 @@ emulation escape or a misconfiguration.
 ## Ingress (inbound) access
 
 - Cowrie ports (2222/2223 → typically 22/23 from outside) -- public,
-  that's the point. `scripts/firewall.sh` rate-limits new connections
-  to Cowrie per source IP (1/minute, burst 3) so a single aggressive
-  scanner doesn't flood you with hundreds of near-identical sessions
-  -- rejected attempts are logged as `COWRIE-INBOUND-RATELIMIT-DROP`.
-  This doesn't reduce how many distinct attackers get captured, only
-  how many times the same one reconnects in a burst.
+  that's the point. `scripts/firewall.sh` caps new connections to
+  Cowrie at 4/day per source IP so a single scanning campaign doesn't
+  flood you with hundreds of near-identical sessions -- rejected
+  attempts are logged as `COWRIE-INBOUND-RATELIMIT-DROP`. This
+  doesn't reduce how many distinct attackers get captured, only how
+  many times the same one reconnects.
 - Grafana (3000) and session-viewer (8080) -- **never expose these to
   the internet**. Network/router-level firewalling must restrict
   access to `ADMIN_CIDR` only. The apps themselves also have a login
