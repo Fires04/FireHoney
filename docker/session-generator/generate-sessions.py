@@ -4,9 +4,10 @@ Runs as its own container "session-generator" (see docker-compose.yml).
 
 Scans cowrie.json (read-only mounted cowrie-var-log volume), finds
 closed sessions (cowrie.log.closed = has a ttylog), looks up metadata
-(src_ip, timestamp, commands run), converts the ttylog to an asciinema
-.cast (if not already done), and regenerates webui/index.html with the
-list.
+(src_ip, timestamp, commands run with their offsets), converts the
+ttylog to an asciinema .cast (if not already done), writes a small
+sidecar <hash>.commands.json with a timestamped command list, and
+regenerates webui/index.html with the session list.
 
 Runs in a loop forever; set the interval via the GENERATE_INTERVAL env
 var (seconds, default 120) in the project's .env file. Pass --once to
@@ -30,6 +31,14 @@ CASTS_DIR = WEBUI_DIR / "casts"
 INDEX = WEBUI_DIR / "index.html"
 INTERVAL = int(os.environ.get("GENERATE_INTERVAL", "120"))
 
+# Automated attackers/bots often paste a whole chain of commands with
+# ~0s between them -- at real speed the terminal replay flashes by
+# too fast to read. Floor every inter-frame gap in the .cast to at
+# least this many seconds so a human eye can follow along. Doesn't
+# meaningfully affect sessions that were already paced like a human
+# typing. Configurable via SESSION_MIN_FRAME_DELAY in .env.
+MIN_FRAME_DELAY = float(os.environ.get("SESSION_MIN_FRAME_DELAY", "0.05"))
+
 
 def ttylog_to_container_path(ttylog_field: str) -> Path:
     # cowrie.json stores paths relative to cowrie's cwd, e.g.
@@ -37,6 +46,44 @@ def ttylog_to_container_path(ttylog_field: str) -> Path:
     # "var/lib/", the rest of the path stays the same.
     rel = ttylog_field.split("var/lib/", 1)[-1]
     return VAR_LIB_DIR / rel
+
+
+def normalize_cast_timing(cast_path: Path, min_delay: float) -> None:
+    """Floor every inter-frame delay in an asciicast v1 file to
+    min_delay, so bot-fast bursts stay visually followable. Rewrites
+    the file in place and recomputes the top-level "duration" field.
+    """
+    if min_delay <= 0:
+        return
+    try:
+        data = json.loads(cast_path.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return
+
+    stdout = data.get("stdout")
+    if not isinstance(stdout, list):
+        return
+
+    total = 0.0
+    for entry in stdout:
+        if not isinstance(entry, list) or len(entry) != 2:
+            continue
+        delay = entry[0]
+        if isinstance(delay, (int, float)) and delay < min_delay:
+            entry[0] = min_delay
+        total += entry[0]
+
+    data["duration"] = total
+    cast_path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def parse_timestamp(ts: str) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def run_once() -> int:
@@ -67,7 +114,10 @@ def run_once() -> int:
                     s["src_ip"] = ev.get("src_ip")
                     s["start"] = ev.get("timestamp")
                 elif eid == "cowrie.command.input":
-                    s["commands"].append(ev.get("input", ""))
+                    s["commands"].append({
+                        "time": ev.get("timestamp"),
+                        "input": ev.get("input", ""),
+                    })
                 elif eid in ("cowrie.login.success", "cowrie.login.failed"):
                     s["login"] = f'{ev.get("username")}/{ev.get("password")} ({"OK" if eid.endswith("success") else "FAIL"})'
                 elif eid == "cowrie.log.closed":
@@ -81,6 +131,7 @@ def run_once() -> int:
         tty_path = ttylog_to_container_path(s["ttylog"])
         cast_name = tty_path.name + ".cast"
         cast_path = CASTS_DIR / cast_name
+        commands_path = CASTS_DIR / (tty_path.name + ".commands.json")
 
         if tty_path.exists() and not cast_path.exists():
             try:
@@ -88,6 +139,7 @@ def run_once() -> int:
                     ["asciinema", "-o", str(cast_path), str(tty_path)],
                     check=True, capture_output=True, timeout=30,
                 )
+                normalize_cast_timing(cast_path, MIN_FRAME_DELAY)
             except Exception as e:
                 print(f"WARN: conversion failed for {tty_path}: {e}", flush=True)
                 continue
@@ -95,7 +147,17 @@ def run_once() -> int:
         if not cast_path.exists():
             continue
 
-        cmds_preview = html.escape(" | ".join(s["commands"][:5])) or "(no commands)"
+        if s["commands"] and not commands_path.exists():
+            session_start = parse_timestamp(s["start"])
+            cmd_list = []
+            for c in s["commands"]:
+                cmd_ts = parse_timestamp(c["time"])
+                offset = (cmd_ts - session_start).total_seconds() if (cmd_ts and session_start) else None
+                cmd_list.append({"t": offset, "cmd": c["input"]})
+            commands_path.write_text(json.dumps(cmd_list), encoding="utf-8")
+
+        cmd_texts = [c["input"] for c in s["commands"]]
+        cmds_preview = html.escape(" | ".join(cmd_texts[:5])) or "(no commands)"
         login = html.escape(s["login"] or "?")
         src_ip = html.escape(s["src_ip"] or "?")
         start = html.escape(s["start"] or "?")

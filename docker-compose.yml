@@ -144,6 +144,7 @@ services:
       - internal
     environment:
       - GENERATE_INTERVAL=${SESSION_GENERATOR_INTERVAL:-120}
+      - SESSION_MIN_FRAME_DELAY=${SESSION_MIN_FRAME_DELAY:-0.05}
     volumes:
       - cowrie-var-log:/data/var/log:ro
       - cowrie-var-lib:/data/var/lib:ro

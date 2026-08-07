@@ -7,23 +7,78 @@
 <style>
   body { font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; margin: 2rem; }
   a.back { color: #58a6ff; text-decoration: none; }
-  #player { max-width: 900px; margin-top: 1rem; }
+  .layout { display: flex; gap: 1.5rem; margin-top: 1rem; align-items: flex-start; flex-wrap: wrap; }
+  #player { max-width: 900px; flex: 1 1 600px; }
+  #commands { flex: 0 0 320px; max-width: 320px; }
+  #commands h2 { font-size: 0.95rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem; }
+  #commands ol { list-style: none; margin: 0; padding: 0; max-height: 500px; overflow-y: auto; border: 1px solid #30363d; border-radius: 6px; }
+  #commands li { border-bottom: 1px solid #21262d; }
+  #commands li:last-child { border-bottom: none; }
+  #commands button {
+    display: block; width: 100%; text-align: left; background: none; border: none;
+    color: #c9d1d9; font-family: monospace; font-size: 0.85em; padding: 0.5rem 0.7rem;
+    cursor: pointer; white-space: pre-wrap; word-break: break-all;
+  }
+  #commands button:hover { background: #161b22; }
+  #commands .t { color: #58a6ff; margin-right: 0.5em; }
+  #commands .empty { color: #8b949e; font-size: 0.85em; padding: 0.5rem 0.7rem; }
 </style>
 </head>
 <body>
 <a class="back" href="index.html">&larr; back to session list</a>
-<div id="player"></div>
+<div class="layout">
+  <div id="player"></div>
+  <div id="commands">
+    <h2>Commands run in this session</h2>
+    <ol id="commands-list"><li class="empty">Loading...</li></ol>
+  </div>
+</div>
 <script src="assets/asciinema-player.min.js"></script>
 <script>
   const params = new URLSearchParams(window.location.search);
   const cast = params.get("cast");
+  const listEl = document.getElementById("commands-list");
+
   if (cast) {
-    AsciinemaPlayer.create(cast, document.getElementById("player"), {
+    const player = AsciinemaPlayer.create(cast, document.getElementById("player"), {
       autoPlay: false,
       terminalFontSize: "medium",
     });
+
+    // Sidecar file written by generate-sessions.py next to the .cast,
+    // same basename with .commands.json instead. Click a command to
+    // jump the player straight to when it happened -- handy since
+    // scripted/bot sessions can fly by too fast to read live.
+    const commandsUrl = cast.replace(/\.cast$/, ".commands.json");
+    fetch(commandsUrl)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((cmds) => {
+        if (!cmds || cmds.length === 0) {
+          listEl.innerHTML = '<li class="empty">No commands recorded for this session.</li>';
+          return;
+        }
+        listEl.innerHTML = "";
+        for (const c of cmds) {
+          const li = document.createElement("li");
+          const btn = document.createElement("button");
+          const tLabel = typeof c.t === "number" ? `+${c.t.toFixed(1)}s` : "";
+          btn.innerHTML = `<span class="t">${tLabel}</span>${c.cmd.replace(/</g, "&lt;")}`;
+          btn.addEventListener("click", () => {
+            if (typeof c.t === "number") {
+              player.seek(c.t);
+              player.play();
+            }
+          });
+          li.appendChild(btn);
+          listEl.appendChild(li);
+        }
+      })
+      .catch(() => {
+        listEl.innerHTML = '<li class="empty">Could not load command list.</li>';
+      });
   } else {
     document.getElementById("player").textContent = "Missing ?cast=... parameter";
+    listEl.innerHTML = "";
   }
 </script>
 </body>

@@ -64,22 +64,39 @@ Two subtle issues we hit while generating this, both handled by
   Debian system; `createfs` only embeds content for regular files,
   not symlinks -- the script dereferences it before generating.
 
-### 2. Layered `userdb.txt`
+### 2. Login timing: `AuthRandom` (default) vs. layered `userdb.txt`
 
-System/service accounts (`www-data`, `mysql`, `nobody`...) are denied
-outright -- a real server sets their shell to `/usr/sbin/nologin`, so
-an interactive login wouldn't succeed anyway. Root additionally has
-four common "is this a honeypot?" canary combos denied
-(`root/root`, `root/123456`, anything containing "honeypot" or
-"cowrie"). Everything else stays permissive -- that's intentional,
-it's the main source of data.
+Out of the box (`auth_class = AuthRandom` in `cowrie.cfg`), every new
+source IP has to make a **random number of attempts** (3-10 by
+default, `auth_class_parameters = 3,10,10`) before any
+username/password succeeds -- instead of the first guess always
+working, which is itself a tell. Successful combos are cached (up to
+the third parameter) so a returning IP, or a different IP reusing the
+same "leaked" creds, gets in faster next time. This is a built-in
+Cowrie feature (`cowrie/core/auth.py`), not custom code -- see
+[CONFIGURATION.md](CONFIGURATION.md).
 
-**A trap we hit:** Cowrie reads `userdb.txt` strictly as ASCII.
-Non-English comments (accented characters) in the file cause a
-`UnicodeDecodeError` on load, which breaks **every single** login
-(fail-closed), not just the intentionally denied ones -- it looks
-like "everything is suddenly broken" rather than an obvious config
-mistake. Keep `userdb.txt` and `cowrie.cfg` pure ASCII.
+**Trade-off:** `AuthRandom` does not consult `userdb.txt` at all.
+With it enabled, *every* combination eventually succeeds -- there's
+no permanent deny list. The layered `userdb.txt` approach (still
+shipped in this repo, just inactive by default) denies system/service
+accounts outright (`www-data`, `mysql`, `nobody`...) since a real
+server sets their shell to `/usr/sbin/nologin`, plus four common
+"is this a honeypot?" canary combos for root (`root/root`,
+`root/123456`, anything containing "honeypot" or "cowrie"). You get
+one behavior or the other, not both, without writing a custom auth
+checker that layers them together.
+
+To switch back to the static `userdb.txt` model, set
+`auth_class = UserDB` (or remove the `auth_class`/
+`auth_class_parameters` lines) in `cowrie.cfg`.
+
+**A trap we hit:** Cowrie reads `userdb.txt` (and `cowrie.cfg`)
+strictly as ASCII. Non-English comments (accented characters) in
+either file cause a `UnicodeDecodeError` on load, which breaks
+**every single** login (fail-closed), not just the intentionally
+denied ones -- it looks like "everything is suddenly broken" rather
+than an obvious config mistake. Keep both files pure ASCII.
 
 ## What we haven't tackled (yet)
 

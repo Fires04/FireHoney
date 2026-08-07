@@ -273,6 +273,238 @@
           "format": "table"
         }
       ]
+    },
+    {
+      "id": 9,
+      "title": "Most common commands run by attackers (selected period)",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Times run"
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "input"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Command"
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "topk(25, sum by (input) (count_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.command.input\" [$__range])))",
+          "refId": "A",
+          "instant": true,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Attacking IPs (selected period)",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sessions"
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "src_ip"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "topk(50, sum by (src_ip) (count_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.session.connect\" [$__range])))",
+          "refId": "A",
+          "instant": true,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Attack origin map (needs GeoIP enabled -- see docs/CONFIGURATION.md)",
+      "type": "geomap",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "view": {
+          "id": "zero",
+          "lat": 20,
+          "lon": 0,
+          "zoom": 1.5
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Attacker sessions",
+            "config": {
+              "style": {
+                "size": {
+                  "fixed": 5,
+                  "min": 2,
+                  "max": 15,
+                  "field": "Value"
+                },
+                "color": {
+                  "fixed": "#f2495c"
+                },
+                "opacity": 0.6
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitudeField": "geoip_location_latitude",
+              "longitudeField": "geoip_location_longitude"
+            }
+          }
+        ],
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true
+        }
+      },
+      "targets": [
+        {
+          "expr": "topk(200, sum by (src_ip, geoip_country_name, geoip_city_name, geoip_location_latitude, geoip_location_longitude) (count_over_time({job=\"cowrie\"} | json | eventid=\"cowrie.session.connect\" [$__range])))",
+          "refId": "A",
+          "instant": true,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ]
     }
   ]
 }
