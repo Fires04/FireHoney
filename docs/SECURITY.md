@@ -25,11 +25,17 @@ emulation escape or a misconfiguration.
 
 - Cowrie ports (2222/2223 → typically 22/23 from outside) -- public,
   that's the point. `scripts/firewall.sh` caps new connections to
-  Cowrie at 4/day per source IP so a single scanning campaign doesn't
+  Cowrie at 10/day per source IP so a single scanning campaign doesn't
   flood you with hundreds of near-identical sessions -- rejected
   attempts are logged as `COWRIE-INBOUND-RATELIMIT-DROP`. This
   doesn't reduce how many distinct attackers get captured, only how
   many times the same one reconnects.
+  **This number must stay >= `cowrie.cfg`'s `auth_class_parameters`
+  maxtry (default 10)** -- AuthRandom counts attempts across separate
+  connections (many bots reconnect per credential tried instead of
+  reusing one connection), so if the firewall cuts an IP off sooner
+  than its own random attempt threshold, that IP can never actually
+  complete a login. Change one, change the other.
 - Grafana (3000) and session-viewer (8080) -- **never expose these to
   the internet**. Network/router-level firewalling must restrict
   access to `ADMIN_CIDR` only. The apps themselves also have a login
@@ -47,7 +53,7 @@ login-attack bot behavior elsewhere on the internet
 `cowrie-blocklist`. `scripts/firewall.sh` drops any new connection
 from that set before it reaches Cowrie (`COWRIE-BLOCKLIST-DROP` in
 the log) -- repeat automated scanners stop showing up in the capture
-at all, on top of the 4/day-per-IP cap.
+at all, on top of the 10/day-per-IP cap.
 
 This is a lagging signal (an IP has to be reported elsewhere first),
 not a filter on your own data -- it never blocks an IP based on

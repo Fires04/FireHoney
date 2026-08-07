@@ -5,11 +5,13 @@
 # tcp/80,443 (downloading malware samples on the attacker's command),
 # rate-limited and logged. Everything else (Grafana, session-viewer,
 # Loki, Promtail, session-generator) has no route to the internet at
-# all. Inbound new connections to Cowrie are also capped at 4/day per
-# source IP, to keep one scanning campaign from flooding you with
-# hundreds of near-identical sessions, and IPs in the "cowrie-blocklist"
-# ipset (populated by scripts/update-blocklist.sh from public
-# known-scanner feeds) are dropped outright.
+# all. Inbound new connections to Cowrie are also capped at 10/day per
+# source IP (matched to cowrie.cfg's AuthRandom maxtry, see the
+# comment at rule 3 below -- don't lower this without lowering maxtry
+# too), to keep one scanning campaign from flooding you with hundreds
+# of near-identical sessions, and IPs in the "cowrie-blocklist" ipset
+# (populated by scripts/update-blocklist.sh from public known-scanner
+# feeds) are dropped outright.
 #
 # Run with: sudo ./scripts/firewall.sh   (or `make firewall`)
 # Requires: docker compose already running (needs COWRIE_IP from .env)
@@ -71,23 +73,33 @@ if command -v ipset >/dev/null 2>&1; then
 fi
 
 # 3) Rate-limit new inbound connections to Cowrie, per source IP --
-#    max 4 sessions/day per IP, everything past that from the same IP
+#    max 10 sessions/day per IP, everything past that from the same IP
 #    is logged and dropped before it ever reaches the container. Real
 #    scanning campaigns (Mirai/Gafgyt-style bots) otherwise reconnect
 #    every few seconds and flood the capture with hundreds of
 #    identical sessions from one source -- this caps that without
 #    reducing how many distinct attackers get through (every new IP
-#    still gets its own 4). Tune --hashlimit-above/--hashlimit-burst
-#    below if 4/day is too tight or too loose for your traffic.
+#    still gets its own 10).
+#
+#    IMPORTANT: this number must stay >= the maxtry value (2nd number)
+#    in cowrie.cfg's auth_class_parameters. AuthRandom requires a
+#    random number of attempts (up to maxtry) before it lets a source
+#    IP in, and it counts those across separate connections, not just
+#    within one -- many bots open a fresh connection per credential
+#    tried. If this limit is lower than maxtry, most attackers get cut
+#    off mid-brute-force and can never reach their own success
+#    threshold at all (confirmed: with this at 4 and maxtry=10, ~75%
+#    of source IPs would never complete a login). Default
+#    auth_class_parameters is 3,10,10 -- keep this at 10 to match.
 iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dports 2222,2223 \
   -m conntrack --ctstate NEW \
   -m hashlimit --hashlimit-name cowrie-inbound --hashlimit-mode srcip \
-  --hashlimit-above 4/day --hashlimit-burst 4 --hashlimit-htable-expire 86400000 \
+  --hashlimit-above 10/day --hashlimit-burst 10 --hashlimit-htable-expire 86400000 \
   -j LOG --log-prefix "COWRIE-INBOUND-RATELIMIT-DROP: "
 iptables -A DOCKER-USER -i "$WAN_IFACE" -d "$COWRIE_IP" -p tcp -m multiport --dports 2222,2223 \
   -m conntrack --ctstate NEW \
   -m hashlimit --hashlimit-name cowrie-inbound --hashlimit-mode srcip \
-  --hashlimit-above 4/day --hashlimit-burst 4 --hashlimit-htable-expire 86400000 \
+  --hashlimit-above 10/day --hashlimit-burst 10 --hashlimit-htable-expire 86400000 \
   -j DROP
 
 # 4) Traffic arriving from WAN is left to Docker's own DNAT logic.
