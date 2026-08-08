@@ -48,13 +48,24 @@ def ttylog_to_container_path(ttylog_field: str) -> Path:
     return VAR_LIB_DIR / rel
 
 
-def normalize_cast_timing(cast_path: Path, min_delay: float) -> None:
-    """Floor every inter-frame delay in an asciicast v1 file to
-    min_delay, so bot-fast bursts stay visually followable. Rewrites
-    the file in place and recomputes the top-level "duration" field.
+# NUL reliably crashes asciinema-player's terminal renderer (confirmed
+# against a real captured session -- it showed the built-in error
+# overlay instead of playing). It's genuine attacker-sent data, not a
+# bug in our capture: some bot probes send raw control bytes, and
+# Cowrie/the ttylog-to-cast conversion preserve them faithfully. We
+# strip it rather than replace it -- a real terminal silently no-ops
+# on a stray NUL too, so this doesn't change what the recording
+# "shows", just what the player can survive rendering.
+_UNSAFE_CHARS = "\x00"
+
+
+def normalize_cast(cast_path: Path, min_delay: float) -> None:
+    """Sanitize control characters the player can't handle (always),
+    and floor every inter-frame delay in an asciicast v1 file to
+    min_delay so bot-fast bursts stay visually followable (only if
+    min_delay > 0). Rewrites the file in place; recomputes the
+    top-level "duration" field only when delays were normalized.
     """
-    if min_delay <= 0:
-        return
     try:
         data = json.loads(cast_path.read_text(encoding="utf-8", errors="replace"))
     except Exception:
@@ -64,16 +75,27 @@ def normalize_cast_timing(cast_path: Path, min_delay: float) -> None:
     if not isinstance(stdout, list):
         return
 
+    changed = False
     total = 0.0
     for entry in stdout:
         if not isinstance(entry, list) or len(entry) != 2:
             continue
-        delay = entry[0]
-        if isinstance(delay, (int, float)) and delay < min_delay:
+        delay, text = entry
+        if isinstance(text, str):
+            cleaned = "".join(c for c in text if c not in _UNSAFE_CHARS)
+            if cleaned != text:
+                entry[1] = cleaned
+                changed = True
+        if min_delay > 0 and isinstance(delay, (int, float)) and delay < min_delay:
             entry[0] = min_delay
-        total += entry[0]
+            changed = True
+        total += entry[0] if isinstance(entry[0], (int, float)) else 0
 
-    data["duration"] = total
+    if not changed:
+        return
+
+    if min_delay > 0:
+        data["duration"] = total
     cast_path.write_text(json.dumps(data), encoding="utf-8")
 
 
@@ -139,7 +161,7 @@ def run_once() -> int:
                     ["asciinema", "-o", str(cast_path), str(tty_path)],
                     check=True, capture_output=True, timeout=30,
                 )
-                normalize_cast_timing(cast_path, MIN_FRAME_DELAY)
+                normalize_cast(cast_path, MIN_FRAME_DELAY)
             except Exception as e:
                 print(f"WARN: conversion failed for {tty_path}: {e}", flush=True)
                 continue
