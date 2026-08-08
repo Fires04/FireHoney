@@ -1,6 +1,6 @@
 .PHONY: setup up down restart logs ps firewall update-blocklist fakefs sessions reset-cowrie reset-data pull update
 
-setup:      ## First-time setup (htpasswd, asciinema-player, docker pull)
+setup:      ## First-time setup (viewer login secret, asciinema-player, docker pull)
 	./scripts/setup.sh
 
 up:         ## Bring up the whole stack in the background

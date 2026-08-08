@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time preparation before the first "docker compose up":
 #   - checks .env
-#   - generates htpasswd for session-viewer from VIEWER_USER/VIEWER_PASSWORD
+#   - generates VIEWER_SESSION_SECRET if it's blank
 #   - downloads the self-hosted asciinema-player (no CDN at runtime)
 #   - pulls docker images
 #
@@ -26,6 +26,11 @@ if ! command -v docker &> /dev/null; then
   exit 1
 fi
 
+if ! command -v openssl &> /dev/null; then
+  echo "openssl is not installed (needed to generate VIEWER_SESSION_SECRET) -- run: apt install openssl" >&2
+  exit 1
+fi
+
 if [ "${GRAFANA_ADMIN_PASSWORD:-change-me-please}" = "change-me-please" ] || \
    [ "${VIEWER_PASSWORD:-change-me-too}" = "change-me-too" ]; then
   echo "!! .env still has the default passwords. Set GRAFANA_ADMIN_PASSWORD" >&2
@@ -36,9 +41,16 @@ fi
 echo "[1/4] webui/ directory structure..."
 mkdir -p webui/casts webui/assets
 
-echo "[2/4] htpasswd for session-viewer (${VIEWER_USER})..."
-docker run --rm httpd:alpine htpasswd -Bbn "${VIEWER_USER}" "${VIEWER_PASSWORD}" \
-  > config/nginx/htpasswd
+echo "[2/4] Session viewer login secret..."
+if [ -z "${VIEWER_SESSION_SECRET:-}" ]; then
+  GENERATED=$(openssl rand -hex 32)
+  # Portable in-place append -- works whether or not the file ends
+  # with a trailing newline.
+  printf '\nVIEWER_SESSION_SECRET=%s\n' "${GENERATED}" >> .env
+  echo "    generated a new one and saved it to .env"
+else
+  echo "    already set, skipping"
+fi
 
 echo "[3/4] Self-hosted asciinema-player (one-time, while there's internet access)..."
 if [ ! -f webui/assets/asciinema-player.min.js ]; then
@@ -55,7 +67,7 @@ fi
 
 echo "[4/4] Pulling docker images (docker compose pull)..."
 docker compose pull cowrie promtail loki grafana session-viewer
-docker compose build session-generator
+docker compose build session-generator viewer-auth
 
 cat <<'EOF'
 

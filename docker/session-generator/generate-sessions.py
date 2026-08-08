@@ -190,10 +190,13 @@ def run_once() -> int:
   .play {{ color: #3fb950; text-decoration: none; font-weight: 600; }}
   .play:hover {{ text-decoration: underline; }}
   .meta {{ color: #8b949e; font-size: 0.85em; margin-bottom: 1.5rem; }}
+  .topbar {{ display: flex; justify-content: space-between; align-items: baseline; }}
+  .logout {{ color: #8b949e; font-size: 0.85em; text-decoration: none; }}
+  .logout:hover {{ color: #c9d1d9; text-decoration: underline; }}
 </style>
 </head>
 <body>
-<h1>Honeypot -- captured sessions</h1>
+<div class="topbar"><h1>Honeypot -- captured sessions</h1><a class="logout" href="/logout">Sign out</a></div>
 <div class="meta">Generated: {generated_at} - Total sessions: {len(rows)}</div>
 <table>
 <tr><th>Time</th><th>Source IP</th><th>Protocol</th><th>Login</th><th>Commands (preview)</th><th></th></tr>

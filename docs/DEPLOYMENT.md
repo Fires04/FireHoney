@@ -52,7 +52,7 @@ Full description of every variable: [CONFIGURATION.md](CONFIGURATION.md)
 ## 3. Setup and startup
 
 ```bash
-make setup       # htpasswd, asciinema-player, docker pull
+make setup       # viewer login secret, asciinema-player, docker pull
 make fakefs        # (recommended) realistic fake filesystem -- see ANTI-DETECTION.md
 make up             # bring up the whole stack
 sudo apt install ipset
@@ -62,8 +62,8 @@ sudo make firewall
 
 Verify everything is running:
 ```bash
-docker compose ps    # 6 containers: cowrie, promtail, loki, grafana,
-                      # session-viewer, session-generator -- all "Up"
+docker compose ps    # 7 containers: cowrie, promtail, loki, grafana,
+                      # session-viewer, viewer-auth, session-generator -- all "Up"
 ```
 
 ## 4. Verification
@@ -75,10 +75,10 @@ sshpass -p test123 ssh -o StrictHostKeyChecking=no attacker@localhost -p "${COWR
 
 - Grafana: `http://SERVER_IP:3000` (login from `.env`) -- you'll land
   straight on the ready-made dashboard
-- Session viewer: `http://SERVER_IP:8080` (basic-auth from `.env`) --
-  your test login shows up after a bit (`SESSION_GENERATOR_INTERVAL`),
-  or right away: `make sessions` (runs the generator on demand,
-  without waiting for the next loop tick)
+- Session viewer: `http://SERVER_IP:8080` (login form, `VIEWER_USER`/
+  `VIEWER_PASSWORD` from `.env`) -- your test login shows up after a
+  bit (`SESSION_GENERATOR_INTERVAL`), or right away: `make sessions`
+  (runs the generator on demand, without waiting for the next loop tick)
 
 ## 5. Firewall verification
 

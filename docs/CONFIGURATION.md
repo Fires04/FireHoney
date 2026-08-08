@@ -10,8 +10,10 @@
 | `SESSION_VIEWER_PORT` | 8080 | Host port for the session overview |
 | `GRAFANA_ADMIN_USER` | admin | Grafana admin login |
 | `GRAFANA_ADMIN_PASSWORD` | — | **Change this!** Grafana admin password |
-| `VIEWER_USER` | viewer | Basic-auth login for the session viewer |
-| `VIEWER_PASSWORD` | — | **Change this!** Basic-auth password, generated into `config/nginx/htpasswd` by `make setup` |
+| `VIEWER_USER` | viewer | Login-form username for the session viewer |
+| `VIEWER_PASSWORD` | — | **Change this!** Login-form password |
+| `VIEWER_SESSION_SECRET` | — | Signs the viewer's login session cookie. `make setup` generates a random one if left blank -- see [SECURITY.md](SECURITY.md#session-viewer-login) |
+| `VIEWER_SESSION_TTL_HOURS` | 12 | How long a viewer login stays signed in |
 | `WAN_IFACE` | eth0 | The host's network interface -- find it with `ip route \| grep default` |
 | `ADMIN_CIDR` | — | Where you're allowed to reach SSH/Grafana/viewer from. Never `0.0.0.0/0` |
 | `DNS_RESOLVERS` | 1.1.1.1,9.9.9.9 | The only DNS servers Cowrie may reach (to resolve URLs during sample downloads) |
@@ -185,5 +187,8 @@ settings → JSON Model) -- just watch the `"datasource": {"uid":
 
 ## `config/nginx/session-viewer.conf`
 
-Basic-auth + static serving of `webui/`. For more users, add lines to
-`config/nginx/htpasswd` (`htpasswd -B config/nginx/htpasswd new_user`).
+Static serving of `webui/`, gated by a login form (`viewer-auth`
+checks every request via nginx's `auth_request` directive -- see
+[SECURITY.md](SECURITY.md#session-viewer-login) for how it works).
+There's a single shared login (`VIEWER_USER`/`VIEWER_PASSWORD`), not
+per-user accounts -- this is meant for one admin, not a team.

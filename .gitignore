@@ -6,7 +6,6 @@ webui/index.html
 webui/casts/
 webui/assets/asciinema-player.min.js
 webui/assets/asciinema-player.css
-config/nginx/htpasswd
 config/cowrie/fs.pickle
 config/promtail/GeoLite2-City.mmdb
 config/promtail/*.mmdb
@@ -14,6 +13,10 @@ config/promtail/*.mmdb.gz
 
 # Temporary files from build scripts
 .fakefs-tmp/
+
+# Python bytecode cache
+__pycache__/
+*.pyc
 
 # OS/editor
 .DS_Store

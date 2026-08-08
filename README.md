@@ -39,7 +39,7 @@ cd cowrie-honeypot-stack
 cp .env.example .env
 $EDITOR .env              # set passwords, WAN_IFACE, ADMIN_CIDR
 
-make setup                # htpasswd, asciinema-player, docker pull
+make setup                # viewer login secret, asciinema-player, docker pull
 make fakefs                # (recommended) realistic fake filesystem
 make up                    # bring up the whole stack
 sudo apt install ipset && sudo make update-blocklist  # (recommended) known-scanner blocklist
@@ -82,10 +82,11 @@ at it.
 │   ├── cowrie/                 cowrie.cfg, userdb.txt, fs.pickle (generated)
 │   ├── promtail/                promtail-config.yml
 │   ├── loki/                    loki-config.yml
-│   ├── nginx/                   session-viewer.conf, htpasswd (generated)
+│   ├── nginx/                   session-viewer.conf
 │   └── grafana/provisioning/    datasource + dashboard, loads itself
 ├── docker/
 │   ├── session-generator/      custom image: turns sessions into .cast + index.html
+│   ├── viewer-auth/             custom image: login-form gate for the session viewer
 │   └── fakefs-builder/          custom image: source for the realistic filesystem
 ├── scripts/
 │   ├── setup.sh                 one-time setup

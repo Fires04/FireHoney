@@ -22,14 +22,21 @@
    │                                                    │ mgmt-publish│
    │   ┌────────────────────┐   ┌────────────────┐     │ (port-publish,│
    │   │ session-generator   │──▶│ session-viewer  │◄────┘ no route out) │
-   │   │ (.cast + index.html)│   │ (nginx+basicauth)│                    │
+   │   │ (.cast + index.html)│   │ (nginx)         │                    │
    │   └────────────────────┘   └────────┬─────────┘                    │
-   │                                       │                             │
-   └───────────────────────────────────────┼─────────────────────────────┘
-                                            │ tcp/3000, tcp/8080
-                                            ▼
-                                   Your admin browser
-                              (only from ADMIN_CIDR, see SECURITY.md)
+   │                                      │ auth_request                │
+   │                                      ▼                             │
+   │                             ┌─────────────────┐                    │
+   │                             │   viewer-auth    │                   │
+   │                             │ (internal-only,  │                   │
+   │                             │  no route out)   │                   │
+   │                             └─────────────────┘                    │
+   │                                                                     │
+   └──────────────────────┬──────────────────────────────────────────┘
+                           │ tcp/3000 (Grafana), tcp/8080 (session-viewer)
+                           ▼
+                  Your admin browser
+             (only from ADMIN_CIDR, see SECURITY.md)
 ```
 
 ## Three Docker networks, and why
@@ -37,7 +44,7 @@
 | Network | Who's on it | Purpose |
 |---|---|---|
 | `honeypot-egress` | Cowrie (static IP) | The only network any container can use to initiate outbound connections -- and even then only on 80/443, thanks to the firewall |
-| `internal` (Docker `internal: true`) | Cowrie, Promtail, Loki, Grafana, session-generator | Docker itself guarantees this network has no route out -- no extra firewall rule needed |
+| `internal` (Docker `internal: true`) | Cowrie, Promtail, Loki, Grafana, session-generator, viewer-auth | Docker itself guarantees this network has no route out -- no extra firewall rule needed |
 | `mgmt-publish` | Grafana, session-viewer, session-generator | Exists **only** because Docker can't publish ports for a container attached solely to an `internal: true` network. `scripts/firewall.sh` grants it no exception -- it effectively has no route out, verified by test |
 
 ## Why one VM, not two
@@ -70,6 +77,9 @@ ourselves:
 
 - `docker/session-generator/` -- a small Python image that
   periodically converts captured sessions into a web-playable format
+- `docker/viewer-auth/` -- a tiny stdlib-only Python service that
+  gates the session viewer with a login form (see SECURITY.md);
+  internal-only, no route out, no third-party auth dependency
 - `docker/fakefs-builder/` -- a one-shot source image for
   `scripts/build-fakefs.sh`, never runs as a service
 
@@ -80,4 +90,6 @@ ourselves:
 3. Promtail tails `cowrie.json` and pushes it to Loki
 4. Grafana queries Loki over LogQL -- the dashboard is ready right after startup (provisioning)
 5. `session-generator` periodically scans `cowrie.json`, finds closed sessions, converts the ttylog to an asciinema `.cast`, and regenerates `webui/index.html`
-6. `session-viewer` (nginx) serves `webui/` behind basic-auth
+6. `session-viewer` (nginx) serves `webui/`, gated by a login form --
+   nginx asks `viewer-auth` (a tiny internal-only stdlib Python
+   service) to check the visitor's session cookie on every request

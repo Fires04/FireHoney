@@ -39,8 +39,34 @@ emulation escape or a misconfiguration.
 - Grafana (3000) and session-viewer (8080) -- **never expose these to
   the internet**. Network/router-level firewalling must restrict
   access to `ADMIN_CIDR` only. The apps themselves also have a login
-  (Grafana) / basic-auth (viewer), but that's not a substitute for
-  network-level restriction.
+  (Grafana's own, and a login form for the viewer -- see below), but
+  that's not a substitute for network-level restriction.
+
+### Session viewer login
+
+`session-viewer` is gated by a login form, not a browser-native HTTP
+Basic Auth popup -- backed by `viewer-auth`
+(`docker/viewer-auth/auth_server.py`), a small stdlib-only Python
+service with no third-party dependencies. nginx asks it `GET
+/auth-check` on every request (the `auth_request` directive) before
+serving anything; on success, viewer-auth signs a stateless session
+cookie (expiry + HMAC, `VIEWER_SESSION_SECRET` from `.env`, no server-
+side session store to lose on restart).
+
+- `viewer-auth` sits on the `internal` network only -- no published
+  port, no route to the internet, unreachable except from
+  `session-viewer` itself.
+- 5 failed login attempts from the same IP within 60s locks that IP
+  out for 60s (in-memory, resets on container restart). This is
+  defense in depth, not the real control -- the real control is that
+  this whole service is behind `ADMIN_CIDR` at the network level (see
+  above), never internet-facing.
+- This is intentionally minimal: one shared login for a private admin
+  tool, no CSRF token, no per-user accounts, no TLS enforcement on the
+  cookie (add the `Secure` attribute in `docker/viewer-auth/
+  auth_server.py`'s `Set-Cookie` header if you ever put this behind
+  TLS). It's scoped to what it protects -- swap in something heavier
+  if you need more.
 - The real SSH for VM administration -- also `ADMIN_CIDR` only, never
   from WAN.
 
