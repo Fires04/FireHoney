@@ -43,41 +43,59 @@
   const listEl = document.getElementById("commands-list");
 
   if (cast) {
-    const player = AsciinemaPlayer.create(cast, document.getElementById("player"), {
-      autoPlay: false,
-      terminalFontSize: "medium",
-    });
-
-    // Sidecar file written by generate-sessions.py next to the .cast,
-    // same basename with .commands.json instead. Click a command to
-    // jump the player straight to when it happened -- handy since
-    // scripted/bot sessions can fly by too fast to read live.
-    const commandsUrl = cast.replace(/\.cast$/, ".commands.json");
-    fetch(commandsUrl)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((cmds) => {
-        if (!cmds || cmds.length === 0) {
-          listEl.innerHTML = '<li class="empty">No commands recorded for this session.</li>';
-          return;
-        }
-        listEl.innerHTML = "";
-        for (const c of cmds) {
-          const li = document.createElement("li");
-          const btn = document.createElement("button");
-          const tLabel = typeof c.t === "number" ? `+${c.t.toFixed(1)}s` : "";
-          btn.innerHTML = `<span class="t">${tLabel}</span>${c.cmd.replace(/</g, "&lt;")}`;
-          btn.addEventListener("click", () => {
-            if (typeof c.t === "number") {
-              player.seek(c.t);
-              player.play();
-            }
-          });
-          li.appendChild(btn);
-          listEl.appendChild(li);
-        }
+    // Fetch and parse the .cast ourselves rather than handing the
+    // player a URL: our files are asciicast v1 (one JSON object), and
+    // the player's URL-loading path only auto-detects v2/v3 (NDJSON)
+    // -- passing a v1 URL there throws "asciicast v1 format not
+    // supported" (silently caught by the player, shows its built-in
+    // error overlay, nothing in the console). v1 only works when
+    // handed in directly as { data: <parsed object> }.
+    fetch(cast)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
       })
-      .catch(() => {
-        listEl.innerHTML = '<li class="empty">Could not load command list.</li>';
+      .then((data) => {
+        const player = AsciinemaPlayer.create({ data }, document.getElementById("player"), {
+          autoPlay: false,
+          terminalFontSize: "medium",
+        });
+
+        // Sidecar file written by generate-sessions.py next to the .cast,
+        // same basename with .commands.json instead. Click a command to
+        // jump the player straight to when it happened -- handy since
+        // scripted/bot sessions can fly by too fast to read live.
+        const commandsUrl = cast.replace(/\.cast$/, ".commands.json");
+        fetch(commandsUrl)
+          .then((r) => (r.ok ? r.json() : []))
+          .then((cmds) => {
+            if (!cmds || cmds.length === 0) {
+              listEl.innerHTML = '<li class="empty">No commands recorded for this session.</li>';
+              return;
+            }
+            listEl.innerHTML = "";
+            for (const c of cmds) {
+              const li = document.createElement("li");
+              const btn = document.createElement("button");
+              const tLabel = typeof c.t === "number" ? `+${c.t.toFixed(1)}s` : "";
+              btn.innerHTML = `<span class="t">${tLabel}</span>${c.cmd.replace(/</g, "&lt;")}`;
+              btn.addEventListener("click", () => {
+                if (typeof c.t === "number") {
+                  player.seek(c.t);
+                  player.play();
+                }
+              });
+              li.appendChild(btn);
+              listEl.appendChild(li);
+            }
+          })
+          .catch(() => {
+            listEl.innerHTML = '<li class="empty">Could not load command list.</li>';
+          });
+      })
+      .catch((e) => {
+        document.getElementById("player").textContent = "Could not load recording: " + e.message;
+        listEl.innerHTML = "";
       });
   } else {
     document.getElementById("player").textContent = "Missing ?cast=... parameter";
